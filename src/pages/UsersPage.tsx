@@ -13,7 +13,10 @@ import {
   X,
   Loader2,
   Building2,
+  XCircle,
 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { getAllUsers } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { StatusBadge } from '@/components/ui/StatusBadge';
@@ -30,33 +33,39 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import type { WA_Device } from '@/types';
-
-// Mock data
-const mockDevices: WA_Device[] = [
-  { id: 1, user: 'USR001', name: 'جهاز المبيعات 1', phone: '+966501234567', connectStatue: 'authenticated', active: true, userActive: true, messageSuccess: 1520, messageSendNo: 1600, createAt: '2024-01-15', orgName: 'شركة الأمل' },
-  { id: 2, user: 'USR002', name: 'دعم العملاء', phone: '+966507654321', connectStatue: 'connecting', active: true, userActive: true, messageSuccess: 890, messageSendNo: 920, createAt: '2024-02-20', orgName: 'مؤسسة النور' },
-  { id: 3, user: 'USR003', name: 'التسويق', phone: '+966509876543', connectStatue: 'close', active: true, userActive: false, messageSuccess: 0, messageSendNo: 0, createAt: '2024-03-10', orgName: 'شركة الرياض' },
-  { id: 4, user: 'USR004', name: 'المبيعات الخارجية', phone: '+966502345678', connectStatue: 'authenticated', active: true, userActive: true, messageSuccess: 2340, messageSendNo: 2400, createAt: '2024-01-25', orgName: 'مجموعة الفجر' },
-  { id: 5, user: 'USR005', name: 'خدمة ما بعد البيع', phone: '+966503456789', connectStatue: 'open', active: true, userActive: true, messageSuccess: 450, messageSendNo: 480, createAt: '2024-04-05', orgName: 'شركة الخليج' },
-];
 
 export default function UsersPage() {
   const [searchQuery, setSearchQuery] = useState('');
-  const [devices] = useState<WA_Device[]>(mockDevices);
-  const [selectedDevice, setSelectedDevice] = useState<WA_Device | null>(null);
+  const { toast } = useToast();
+  const [selectedDevice, setSelectedDevice] = useState<any>(null);
   const [showQRModal, setShowQRModal] = useState(false);
   const [isLoadingQR, setIsLoadingQR] = useState(false);
-  const { toast } = useToast();
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['users'],
+    queryFn: getAllUsers,
+  });
+
+  const devices = data?.data.Users || [];
+
+  const mapStatus = (status: string): any => {
+    switch (status) {
+      case 'ready': return 'authenticated';
+      case 'qr': return 'open';
+      case 'none': return 'close';
+      case 'logout': return 'close';
+      default: return 'close';
+    }
+  };
 
   const filteredDevices = devices.filter(
     (device) =>
-      device.name.includes(searchQuery) ||
-      device.phone.includes(searchQuery) ||
-      device.orgName?.includes(searchQuery)
+      (device.SOMNA && device.SOMNA.includes(searchQuery)) ||
+      (device.SOMPH && device.SOMPH.includes(searchQuery)) ||
+      (device.CIORG && device.CIORG.includes(searchQuery))
   );
 
-  const handleShowQR = async (device: WA_Device) => {
+  const handleShowQR = async (device: any) => {
     setSelectedDevice(device);
     setShowQRModal(true);
     setIsLoadingQR(true);
@@ -66,10 +75,10 @@ export default function UsersPage() {
     setIsLoadingQR(false);
   };
 
-  const handleRestartSession = async (device: WA_Device) => {
+  const handleRestartSession = async (device: any) => {
     toast({
       title: 'جاري إعادة تشغيل الجلسة',
-      description: `إعادة تشغيل جلسة ${device.name}...`,
+      description: `إعادة تشغيل جلسة ${device.SOMNA || device.SOMDE || device.USER}...`,
     });
     
     await new Promise(resolve => setTimeout(resolve, 2000));
@@ -80,18 +89,37 @@ export default function UsersPage() {
     });
   };
 
-  const handleDeleteSession = (device: WA_Device) => {
+  const handleDeleteSession = (device: any) => {
     toast({
       title: 'تأكيد الحذف',
-      description: `هل أنت متأكد من حذف ${device.name}؟`,
+      description: `هل أنت متأكد من حذف ${device.SOMNA || device.SOMDE || device.USER}؟`,
       variant: 'destructive',
     });
   };
 
-  const getSuccessRate = (device: WA_Device) => {
-    if (device.messageSendNo === 0) return 0;
-    return ((device.messageSuccess / device.messageSendNo) * 100).toFixed(1);
-  };
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+        <p className="text-muted-foreground animate-pulse">جاري تحميل بيانات الأجهزة...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4 text-center">
+        <div className="w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
+          <XCircle className="w-6 h-6 text-destructive" />
+        </div>
+        <div>
+          <h3 className="text-lg font-semibold text-foreground">فشل تحميل بيانات الأجهزة</h3>
+          <p className="text-sm text-muted-foreground mt-1">يرجى التحقق من اتصالك بالخادم والمحاولة مرة أخرى</p>
+        </div>
+      </div>
+    );
+  }
+
 
   return (
     <div className="space-y-4 lg:space-y-6">
@@ -139,14 +167,13 @@ export default function UsersPage() {
               <th>رقم الهاتف</th>
               <th>المنظمة</th>
               <th>الحالة</th>
-              <th>نسبة النجاح</th>
               <th>الإجراءات</th>
             </tr>
           </thead>
           <tbody>
             {filteredDevices.map((device, index) => (
               <motion.tr
-                key={device.id}
+                key={device.SOMSEQ}
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: index * 0.05 }}
@@ -155,35 +182,22 @@ export default function UsersPage() {
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center relative">
                       <Smartphone className="w-5 h-5 text-primary" />
-                      {device.connectStatue === 'authenticated' && (
+                      {mapStatus(device.SOMCST) === 'authenticated' && (
                         <span className="absolute -bottom-0.5 -left-0.5 w-3 h-3 rounded-full bg-success border-2 border-card" />
                       )}
                     </div>
                     <div>
-                      <p className="font-medium text-foreground">{device.name}</p>
-                      <p className="text-xs text-muted-foreground">{device.user}</p>
+                      <p className="font-medium text-foreground">{device.SOMNA || device.SOMDE || 'جهاز بدون اسم'}</p>
+                      <p className="text-xs text-muted-foreground">{device.USER}</p>
                     </div>
                   </div>
                 </td>
                 <td className="text-muted-foreground font-mono text-sm" dir="ltr">
-                  {device.phone}
+                  {device.SOMPH || '-'}
                 </td>
-                <td className="text-muted-foreground">{device.orgName}</td>
+                <td className="text-muted-foreground">{device.CIORG}</td>
                 <td>
-                  <StatusBadge status={device.connectStatue} />
-                </td>
-                <td>
-                  <div className="flex items-center gap-2">
-                    <div className="w-20 h-2 bg-muted rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-success rounded-full transition-all"
-                        style={{ width: `${getSuccessRate(device)}%` }}
-                      />
-                    </div>
-                    <span className="text-sm text-muted-foreground">
-                      {getSuccessRate(device)}%
-                    </span>
-                  </div>
+                  <StatusBadge status={mapStatus(device.SOMCST)} />
                 </td>
                 <td>
                   <div className="flex items-center gap-1">
@@ -240,7 +254,7 @@ export default function UsersPage() {
       <div className="lg:hidden space-y-3">
         {filteredDevices.map((device, index) => (
           <motion.div
-            key={device.id}
+            key={device.SOMSEQ}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.05 }}
@@ -250,36 +264,23 @@ export default function UsersPage() {
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center relative">
                   <Smartphone className="w-5 h-5 text-primary" />
-                  {device.connectStatue === 'authenticated' && (
+                  {mapStatus(device.SOMCST) === 'authenticated' && (
                     <span className="absolute -bottom-0.5 -left-0.5 w-3 h-3 rounded-full bg-success border-2 border-card" />
                   )}
                 </div>
                 <div>
-                  <p className="font-medium text-foreground">{device.name}</p>
-                  <p className="text-xs text-muted-foreground font-mono" dir="ltr">{device.phone}</p>
+                  <p className="font-medium text-foreground">{device.SOMNA || device.SOMDE || 'جهاز بدون اسم'}</p>
+                  <p className="text-xs text-muted-foreground font-mono" dir="ltr">{device.SOMPH || '-'}</p>
                 </div>
               </div>
-              <StatusBadge status={device.connectStatue} />
+              <StatusBadge status={mapStatus(device.SOMCST)} />
             </div>
 
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Building2 className="w-4 h-4" />
-              <span>{device.orgName}</span>
+              <span>{device.CIORG}</span>
             </div>
 
-            {/* Success Rate */}
-            <div className="space-y-1">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">نسبة النجاح</span>
-                <span className="font-medium">{getSuccessRate(device)}%</span>
-              </div>
-              <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-success rounded-full transition-all"
-                  style={{ width: `${getSuccessRate(device)}%` }}
-                />
-              </div>
-            </div>
 
             {/* Actions */}
             <div className="flex items-center gap-2 pt-2 border-t border-border">
@@ -355,7 +356,7 @@ export default function UsersPage() {
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                   <QrCode className="w-5 h-5 text-primary" />
-                  رمز QR - {selectedDevice.name}
+                  رمز QR - {selectedDevice.SOMNA || selectedDevice.SOMDE || selectedDevice.USER}
                 </DialogTitle>
               </DialogHeader>
               <div className="flex flex-col items-center justify-center py-8">
@@ -369,17 +370,21 @@ export default function UsersPage() {
                     animate={{ scale: 1, opacity: 1 }}
                     className="w-48 h-48 bg-white rounded-xl p-4 shadow-lg"
                   >
-                    {/* Placeholder QR - replace with actual QR */}
-                    <div className="w-full h-full bg-gradient-to-br from-foreground/10 to-foreground/5 rounded-lg flex items-center justify-center">
-                      <QrCode className="w-24 h-24 text-foreground/20" />
-                    </div>
+                    {/* Display actual QR if available */}
+                    {selectedDevice.SOMQR ? (
+                      <img src={selectedDevice.SOMQR} alt="QR Code" className="w-full h-full object-contain" />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-foreground/10 to-foreground/5 rounded-lg flex items-center justify-center">
+                        <QrCode className="w-24 h-24 text-foreground/20" />
+                      </div>
+                    )}
                   </motion.div>
                 )}
                 <p className="text-sm text-muted-foreground mt-4 text-center">
                   امسح هذا الرمز باستخدام تطبيق واتساب
                 </p>
                 <p className="text-xs text-muted-foreground mt-2 font-mono" dir="ltr">
-                  {selectedDevice.phone}
+                  {selectedDevice.SOMPH || '-'}
                 </p>
               </div>
               <div className="flex justify-end">

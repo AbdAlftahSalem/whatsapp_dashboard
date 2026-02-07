@@ -14,6 +14,7 @@ import {
   Power,
   CheckCircle,
   XCircle,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,6 +35,8 @@ import {
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
+import { useQuery } from '@tanstack/react-query';
+import { getServers } from '@/lib/api';
 
 interface ServerData {
   id: number;
@@ -47,23 +50,34 @@ interface ServerData {
   location: string;
 }
 
-// Mock data
-const mockServers: ServerData[] = [
-  { id: 1, name: 'الخادم الرئيسي', ip: '192.168.1.100', status: 'online', cpuUsage: 45, ramUsage: 8, ramTotal: 16, uptime: '45 يوم', location: 'الرياض' },
-  { id: 2, name: 'خادم الرسائل', ip: '192.168.1.101', status: 'online', cpuUsage: 72, ramUsage: 12, ramTotal: 16, uptime: '30 يوم', location: 'جدة' },
-  { id: 3, name: 'خادم النسخ الاحتياطي', ip: '192.168.1.102', status: 'offline', cpuUsage: 0, ramUsage: 0, ramTotal: 8, uptime: '-', location: 'الدمام' },
-  { id: 4, name: 'خادم الواتساب 1', ip: '192.168.1.103', status: 'online', cpuUsage: 58, ramUsage: 6, ramTotal: 8, uptime: '15 يوم', location: 'الرياض' },
-  { id: 5, name: 'خادم الواتساب 2', ip: '192.168.1.104', status: 'restarting', cpuUsage: 0, ramUsage: 4, ramTotal: 8, uptime: '-', location: 'جدة' },
-];
-
 export default function ServersPage() {
-  const [servers, setServers] = useState<ServerData[]>(mockServers);
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedServer, setSelectedServer] = useState<ServerData | null>(null);
   const [newServer, setNewServer] = useState({ name: '', ip: '', location: '' });
   const { toast } = useToast();
+
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: ['servers'],
+    queryFn: getServers,
+  });
+
+  const rawServers = data?.data?.servers || [];
+  
+  // Transform API data to match ServerData interface, keeping CPU/RAM as mock values
+  const servers: ServerData[] = rawServers.map((s, index) => ({
+    id: s.SISEQ,
+    name: s.SISN,
+    ip: s.SIIP,
+    status: s.SIST === 1 ? 'online' : 'offline',
+    // Keep CPU and RAM as mock values as requested
+    cpuUsage: [45, 72, 0, 58, 0][index % 5],
+    ramUsage: [8, 12, 0, 6, 4][index % 5],
+    ramTotal: [16, 16, 8, 8, 8][index % 5],
+    uptime: ['45 يوم', '30 يوم', '-', '15 يوم', '-'][index % 5],
+    location: ['الرياض', 'جدة', 'الدمام', 'الرياض', 'جدة'][index % 5],
+  }));
 
   const filteredServers = servers.filter(
     (server) =>
@@ -73,51 +87,30 @@ export default function ServersPage() {
   );
 
   const handleAddServer = () => {
-    const server: ServerData = {
-      id: Date.now(),
-      name: newServer.name,
-      ip: newServer.ip,
-      status: 'offline',
-      cpuUsage: 0,
-      ramUsage: 0,
-      ramTotal: 8,
-      uptime: '-',
-      location: newServer.location,
-    };
-    setServers([...servers, server]);
-    setNewServer({ name: '', ip: '', location: '' });
+    // In a real app, this would be an API call
+    toast({ title: 'ميزة إضافة خادم ستتوفر قريباً عبر الـ API' });
     setIsAddModalOpen(false);
-    toast({ title: 'تم إضافة الخادم بنجاح' });
   };
 
   const handleEditServer = () => {
-    if (!selectedServer) return;
-    setServers(servers.map(s => s.id === selectedServer.id ? selectedServer : s));
+    // In a real app, this would be an API call
+    toast({ title: 'ميزة تعديل خادم ستتوفر قريباً عبر الـ API' });
     setIsEditModalOpen(false);
-    toast({ title: 'تم تحديث الخادم بنجاح' });
   };
 
   const handleDeleteServer = (id: number) => {
-    setServers(servers.filter(s => s.id !== id));
-    toast({ title: 'تم حذف الخادم', variant: 'destructive' });
+    // In a real app, this would be an API call
+    toast({ title: 'ميزة حذف خادم ستتوفر قريباً عبر الـ API', variant: 'destructive' });
   };
 
   const handleRestartServer = (id: number) => {
-    setServers(servers.map(s => s.id === id ? { ...s, status: 'restarting' as const } : s));
-    toast({ title: 'جاري إعادة تشغيل الخادم...' });
-    setTimeout(() => {
-      setServers(prev => prev.map(s => s.id === id ? { ...s, status: 'online' as const } : s));
-      toast({ title: 'تم إعادة تشغيل الخادم بنجاح' });
-    }, 3000);
+    // In a real app, this would be an API call
+    toast({ title: 'جاري إرسال طلب إعادة التشغيل...' });
   };
 
   const handleRestartAll = () => {
-    setServers(servers.map(s => ({ ...s, status: 'restarting' as const })));
-    toast({ title: 'جاري إعادة تشغيل جميع الخوادم...' });
-    setTimeout(() => {
-      setServers(prev => prev.map(s => ({ ...s, status: 'online' as const })));
-      toast({ title: 'تم إعادة تشغيل جميع الخوادم بنجاح' });
-    }, 5000);
+    // In a real app, this would be an API call
+    toast({ title: 'جاري إرسال طلب إعادة تشغيل جميع الخوادم...' });
   };
 
   const getStatusIcon = (status: string) => {
@@ -143,6 +136,32 @@ export default function ServersPage() {
     if (usage >= 60) return 'text-warning';
     return 'text-success';
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+        <p className="text-muted-foreground animate-pulse">جاري تحميل بيانات الخوادم...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4 text-center">
+        <div className="w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
+          <XCircle className="w-6 h-6 text-destructive" />
+        </div>
+        <div>
+          <h3 className="text-lg font-semibold text-foreground">فشل تحميل بيانات الخوادم</h3>
+          <p className="text-sm text-muted-foreground mt-1">يرجى التحقق من اتصالك بالخادم والمحاولة مرة أخرى</p>
+          <Button variant="outline" onClick={() => refetch()} className="mt-4">
+            تحميل مرة أخرى
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -262,6 +281,13 @@ export default function ServersPage() {
             </div>
           </motion.div>
         ))}
+
+        {filteredServers.length === 0 && (
+          <div className="col-span-full p-12 text-center bg-card rounded-xl border border-border">
+            <Server className="w-12 h-12 mx-auto text-muted-foreground/50 mb-4" />
+            <p className="text-muted-foreground">لا توجد نتائج</p>
+          </div>
+        )}
       </div>
 
       {/* Add Server Modal */}

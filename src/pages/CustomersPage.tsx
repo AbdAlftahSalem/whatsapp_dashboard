@@ -12,6 +12,8 @@ import {
   Filter,
   Phone,
   Mail,
+  Loader2,
+  XCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,27 +24,49 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import type { WA_Organization } from '@/types';
-
-// Mock data
-const mockCustomers: WA_Organization[] = [
-  { id: 1, org: 'ORG001', name: 'شركة الأمل للتجارة', email: 'info@alamal.com', phone: '+966501234567', country: 'السعودية', address: 'الرياض', active: true, deviceNumber: 10 },
-  { id: 2, org: 'ORG002', name: 'مؤسسة النور', email: 'contact@alnoor.sa', phone: '+966507654321', country: 'السعودية', address: 'جدة', active: true, deviceNumber: 5 },
-  { id: 3, org: 'ORG003', name: 'شركة الرياض المتحدة', email: 'sales@riyadh-united.com', phone: '+966509876543', country: 'السعودية', address: 'الرياض', active: false, deviceNumber: 15 },
-  { id: 4, org: 'ORG004', name: 'مجموعة الفجر', email: 'info@alfajr.sa', phone: '+966502345678', country: 'السعودية', address: 'الدمام', active: true, deviceNumber: 8 },
-  { id: 5, org: 'ORG005', name: 'شركة الخليج للاستثمار', email: 'invest@gulf.com', phone: '+966503456789', country: 'السعودية', address: 'الخبر', active: true, deviceNumber: 20 },
-];
+import { useQuery } from '@tanstack/react-query';
+import { getCustomers } from '@/lib/api';
 
 export default function CustomersPage() {
   const [searchQuery, setSearchQuery] = useState('');
-  const [customers] = useState<WA_Organization[]>(mockCustomers);
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['customers'],
+    queryFn: getCustomers,
+  });
+
+  const customers = data?.data.customers || [];
 
   const filteredCustomers = customers.filter(
     (customer) =>
-      customer.name.includes(searchQuery) ||
-      customer.email.includes(searchQuery) ||
-      customer.phone.includes(searchQuery)
+      (customer.CINA && customer.CINA.includes(searchQuery)) ||
+      (customer.CIEM && customer.CIEM.includes(searchQuery)) ||
+      (customer.CIPH1 && customer.CIPH1.includes(searchQuery)) ||
+      (customer.CIORG && customer.CIORG.includes(searchQuery))
   );
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+        <p className="text-muted-foreground animate-pulse">جاري تحميل بيانات العملاء...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4 text-center">
+        <div className="w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
+          <XCircle className="w-6 h-6 text-destructive" />
+        </div>
+        <div>
+          <h3 className="text-lg font-semibold text-foreground">فشل تحميل بيانات العملاء</h3>
+          <p className="text-sm text-muted-foreground mt-1">يرجى التحقق من اتصالك بالخادم والمحاولة مرة أخرى</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 lg:space-y-6">
@@ -97,7 +121,7 @@ export default function CustomersPage() {
           <tbody>
             {filteredCustomers.map((customer, index) => (
               <motion.tr
-                key={customer.id}
+                key={customer.CISEQ}
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: index * 0.05 }}
@@ -108,20 +132,20 @@ export default function CustomersPage() {
                       <Building2 className="w-5 h-5 text-primary" />
                     </div>
                     <div>
-                      <p className="font-medium text-foreground">{customer.name}</p>
-                      <p className="text-xs text-muted-foreground">{customer.org}</p>
+                      <p className="font-medium text-foreground">{customer.CINA || customer.CINE || 'بدون اسم'}</p>
+                      <p className="text-xs text-muted-foreground">{customer.CIORG}</p>
                     </div>
                   </div>
                 </td>
-                <td className="text-muted-foreground" dir="ltr">{customer.email}</td>
-                <td className="text-muted-foreground" dir="ltr">{customer.phone}</td>
+                <td className="text-muted-foreground" dir="ltr">{customer.CIEM || '-'}</td>
+                <td className="text-muted-foreground" dir="ltr">{customer.CIPH1 || '-'}</td>
                 <td>
                   <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-muted text-sm">
-                    {customer.deviceNumber} جهاز
+                    {customer.CINU} جهاز
                   </span>
                 </td>
                 <td>
-                  <StatusBadge status={customer.active ? 'active' : 'inactive'} />
+                  <StatusBadge status={customer.CIST === 1 ? 'active' : 'inactive'} />
                 </td>
                 <td>
                   <DropdownMenu>
@@ -163,7 +187,7 @@ export default function CustomersPage() {
       <div className="lg:hidden space-y-3">
         {filteredCustomers.map((customer, index) => (
           <motion.div
-            key={customer.id}
+            key={customer.CISEQ}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.05 }}
@@ -175,8 +199,8 @@ export default function CustomersPage() {
                   <Building2 className="w-5 h-5 text-primary" />
                 </div>
                 <div>
-                  <p className="font-medium text-foreground">{customer.name}</p>
-                  <p className="text-xs text-muted-foreground">{customer.org}</p>
+                  <p className="font-medium text-foreground">{customer.CINA || customer.CINE || 'بدون اسم'}</p>
+                  <p className="text-xs text-muted-foreground">{customer.CIORG}</p>
                 </div>
               </div>
               <DropdownMenu>
@@ -205,19 +229,19 @@ export default function CustomersPage() {
             <div className="space-y-2 text-sm">
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Mail className="w-4 h-4" />
-                <span dir="ltr" className="truncate">{customer.email}</span>
+                <span dir="ltr" className="truncate">{customer.CIEM || '-'}</span>
               </div>
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Phone className="w-4 h-4" />
-                <span dir="ltr">{customer.phone}</span>
+                <span dir="ltr">{customer.CIPH1 || '-'}</span>
               </div>
             </div>
 
             <div className="flex items-center justify-between pt-2 border-t border-border">
               <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-muted text-xs">
-                {customer.deviceNumber} جهاز
+                {customer.CINU} جهاز
               </span>
-              <StatusBadge status={customer.active ? 'active' : 'inactive'} />
+              <StatusBadge status={customer.CIST === 1 ? 'active' : 'inactive'} />
             </div>
           </motion.div>
         ))}
@@ -242,10 +266,7 @@ export default function CustomersPage() {
           <Button variant="outline" size="sm" className="bg-primary text-primary-foreground">
             1
           </Button>
-          <Button variant="outline" size="sm">
-            2
-          </Button>
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" disabled>
             التالي
           </Button>
         </div>
