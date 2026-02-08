@@ -4,7 +4,6 @@ import {
   LayoutDashboard,
   Building2,
   Smartphone,
-  Settings,
   LogOut,
   MessageCircle,
   Menu,
@@ -24,7 +23,6 @@ const navItems = [
   { path: '/dashboard/users', icon: Smartphone, label: 'الأجهزة' },
   { path: '/dashboard/servers', icon: Server, label: 'الخوادم' },
   { path: '/dashboard/logs', icon: FileText, label: 'السجلات' },
-  { path: '/dashboard/settings', icon: Settings, label: 'الإعدادات' },
 ];
 
 export function DashboardSidebar() {

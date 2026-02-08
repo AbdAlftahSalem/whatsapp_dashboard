@@ -15,8 +15,10 @@ import {
   Building2,
   XCircle,
 } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
-import { getAllUsers } from '@/lib/api';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { getAllUsers, deleteUser, updateUser } from '@/lib/api';
+import { useAuthStore } from '@/stores/authStore';
+import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { StatusBadge } from '@/components/ui/StatusBadge';
@@ -31,22 +33,30 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
+  DialogFooter,
 } from '@/components/ui/dialog';
-import { useToast } from '@/hooks/use-toast';
+import { Label } from '@/components/ui/label';
 
 export default function UsersPage() {
   const [searchQuery, setSearchQuery] = useState('');
-  const { toast } = useToast();
   const [selectedDevice, setSelectedDevice] = useState<any>(null);
   const [showQRModal, setShowQRModal] = useState(false);
   const [isLoadingQR, setIsLoadingQR] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editData, setEditData] = useState({ name: '', detail: '', phone: '' });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { data, isLoading, error } = useQuery({
+  const { toast } = useToast();
+  const { accessToken: token } = useAuthStore();
+  const queryClient = useQueryClient();
+
+  const { data: usersData, isLoading, error } = useQuery({
     queryKey: ['users'],
     queryFn: getAllUsers,
   });
 
-  const devices = data?.data.Users || [];
+  const devices = usersData?.data.Users || [];
 
   const mapStatus = (status: string): any => {
     switch (status) {
@@ -65,14 +75,64 @@ export default function UsersPage() {
       (device.CIORG && device.CIORG.includes(searchQuery))
   );
 
-  const handleShowQR = async (device: any) => {
+  const handleShowQR = (device: any) => {
     setSelectedDevice(device);
-    setShowQRModal(true);
     setIsLoadingQR(true);
-    
-    // Simulate loading QR
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    setIsLoadingQR(false);
+    setShowQRModal(true);
+    // Simulate loading for better UX
+    setTimeout(() => setIsLoadingQR(false), 1000);
+  };
+
+  const handleDelete = async (user: string) => {
+    if (!token) return;
+    if (!confirm('هل أنت متأكد من حذف هذا الجهاز؟')) return;
+
+    try {
+      await deleteUser(user, token);
+      toast({
+        title: 'تم الحذف بنجاح',
+        description: `تم حذف الجهاز ${user} بنجاح`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+    } catch (error) {
+      toast({
+        title: 'فشل الحذف',
+        description: error instanceof Error ? error.message : 'حدث خطأ غير متوقع',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleEdit = (device: any) => {
+    setSelectedDevice(device);
+    setEditData({
+      name: device.SOMNA || '',
+      detail: device.SOMDE || '',
+      phone: device.SOMPH || '',
+    });
+    setShowEditModal(true);
+  };
+
+  const handleUpdate = async () => {
+    if (!token || !selectedDevice) return;
+    setIsSubmitting(true);
+    try {
+      await updateUser(selectedDevice.USER, editData, token);
+      toast({
+        title: 'تم التحديث بنجاح',
+        description: 'تم تحديث بيانات الجهاز بنجاح',
+      });
+      setShowEditModal(false);
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+    } catch (error) {
+      toast({
+        title: 'فشل التحديث',
+        description: error instanceof Error ? error.message : 'حدث خطأ غير متوقع',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleRestartSession = async (device: any) => {
@@ -226,13 +286,20 @@ export default function UsersPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-40">
-                        <DropdownMenuItem
-                          className="gap-2 text-destructive"
-                          onClick={() => handleDeleteSession(device)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                          حذف الجهاز
-                        </DropdownMenuItem>
+                       <DropdownMenuItem 
+                        className="gap-2"
+                        onClick={() => handleEdit(device)}
+                      >
+                        <RefreshCw className="w-4 h-4" />
+                        تعديل
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        className="gap-2 text-destructive"
+                        onClick={() => handleDelete(device.USER)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        حذف
+                      </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
@@ -309,13 +376,20 @@ export default function UsersPage() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-40">
-                  <DropdownMenuItem
-                    className="gap-2 text-destructive"
-                    onClick={() => handleDeleteSession(device)}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    حذف الجهاز
-                  </DropdownMenuItem>
+                 <DropdownMenuItem 
+                  className="gap-2"
+                  onClick={() => handleEdit(device)}
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  تعديل
+                </DropdownMenuItem>
+                <DropdownMenuItem 
+                  className="gap-2 text-destructive"
+                  onClick={() => handleDelete(device.USER)}
+                >
+                  <Trash2 className="w-4 h-4" />
+                  حذف
+                </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
@@ -393,6 +467,67 @@ export default function UsersPage() {
                   إغلاق
                 </Button>
               </div>
+            </DialogContent>
+          </Dialog>
+        )}
+      </AnimatePresence>
+
+      {/* Edit User Modal */}
+      <AnimatePresence>
+        {showEditModal && (
+          <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
+            <DialogContent className="sm:max-w-md text-right" dir="rtl">
+              <DialogHeader>
+                <DialogTitle className="text-right">تعديل بيانات الجهاز</DialogTitle>
+                <DialogDescription className="text-right">
+                  تحديث معلومات الجهاز: {selectedDevice?.USER}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2 text-right">
+                  <Label htmlFor="edit-name">اسم الجهاز</Label>
+                  <Input
+                    id="edit-name"
+                    value={editData.name}
+                    onChange={(e) => setEditData({ ...editData, name: e.target.value })}
+                    placeholder="اسم الجهاز"
+                  />
+                </div>
+                <div className="space-y-2 text-right">
+                  <Label htmlFor="edit-phone">رقم الهاتف</Label>
+                  <Input
+                    id="edit-phone"
+                    value={editData.phone}
+                    onChange={(e) => setEditData({ ...editData, phone: e.target.value })}
+                    placeholder="رقم الهاتف"
+                    dir="ltr"
+                  />
+                </div>
+                <div className="space-y-2 text-right">
+                  <Label htmlFor="edit-detail">التفاصيل / الموقع</Label>
+                  <Input
+                    id="edit-detail"
+                    value={editData.detail}
+                    onChange={(e) => setEditData({ ...editData, detail: e.target.value })}
+                    placeholder="التفاصيل"
+                  />
+                </div>
+              </div>
+              <DialogFooter className="gap-2 sm:justify-start">
+                <Button variant="outline" onClick={() => setShowEditModal(false)}>
+                  إلغاء
+                </Button>
+                <Button onClick={handleUpdate} disabled={isSubmitting}>
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 ml-2 animate-spin" />
+                      جاري الحفظ...
+                    </>
+                  ) : (
+                    'حفظ التغييرات'
+                  )}
+                </Button>
+              </DialogFooter>
             </DialogContent>
           </Dialog>
         )}

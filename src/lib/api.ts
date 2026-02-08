@@ -168,6 +168,7 @@ export interface GenericResponse {
 }
 
 export async function addCustomer(data: AddCustomerRequest, token: string): Promise<AddCustomerResponse> {
+  console.log('Add Customer Request:', data);
   const response = await fetch(`${BASE_URL}/ESAPI/EWA/V3/es/add_cus`, {
     method: 'POST',
     headers: {
@@ -176,14 +177,19 @@ export async function addCustomer(data: AddCustomerRequest, token: string): Prom
     },
     body: JSON.stringify(data),
   });
+  
+  const result = await response.json();
+  console.log('Add Customer Response:', result);
+
   if (!response.ok) {
-    throw new Error('Failed to add customer');
+    console.log(`add customer error: ${response.statusText}`, result);
+    throw new Error(result.message || 'Failed to add customer');
   }
-  return response.json();
+  return result;
 }
 
 export async function deleteCustomer(org: string, token: string): Promise<GenericResponse> {
-  const response = await fetch(`${BASE_URL}/ESAPI/EWA/V3/es/del_cus`, {
+  const response = await fetch(`${BASE_URL}/ESAPI/EWA/V3/admin/del_cus`, {
     method: 'POST',
     headers: {
       'Authorization': `Basic ${token}`,
@@ -197,7 +203,17 @@ export async function deleteCustomer(org: string, token: string): Promise<Generi
   return response.json();
 }
 
-export async function updateCustomer(org: string, data: Partial<WA_Organization>, token: string): Promise<GenericResponse> {
+export interface UpdateCustomerRequest {
+  name?: string;
+  phone?: string;
+  address?: string;
+  cinu?: number;
+  citd?: string;
+  [key: string]: any;
+}
+
+export async function updateCustomer(org: string, data: UpdateCustomerRequest, token: string): Promise<GenericResponse> {
+  console.log('Update Customer Request:', { org, data });
   const response = await fetch(`${BASE_URL}/ESAPI/EWA/V3/admin/upd_cus`, {
     method: 'POST',
     headers: {
@@ -206,10 +222,14 @@ export async function updateCustomer(org: string, data: Partial<WA_Organization>
     },
     body: JSON.stringify({ org, data }),
   });
+
+  const result = await response.json();
+  console.log('Update Customer Response:', result);
+
   if (!response.ok) {
-    throw new Error('Failed to update customer');
+    throw new Error(result.message || 'Failed to update customer');
   }
-  return response.json();
+  return result;
 }
 
 // --- User Management ---

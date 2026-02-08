@@ -8,12 +8,11 @@ import {
   MoreHorizontal,
   Edit2,
   Trash2,
-  Eye,
-  Filter,
   Phone,
   Mail,
   Loader2,
   XCircle,
+  Calendar,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,18 +23,97 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useQuery } from '@tanstack/react-query';
-import { getCustomers } from '@/lib/api';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { getCustomers, deleteCustomer, updateCustomer } from '@/lib/api';
+import { useAuthStore } from '@/stores/authStore';
+import { useToast } from '@/hooks/use-toast';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 
 export default function CustomersPage() {
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editData, setEditData] = useState({ 
+    name: '', 
+    phone: '', 
+    address: '',
+    cinu: 1,
+    citd: '' 
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { data, isLoading, error } = useQuery({
+  const { toast } = useToast();
+  const { accessToken: token } = useAuthStore();
+  const queryClient = useQueryClient();
+
+  const { data: customersData, isLoading, error } = useQuery({
     queryKey: ['customers'],
     queryFn: getCustomers,
   });
 
-  const customers = data?.data.customers || [];
+  const handleEdit = (customer: any) => {
+    setSelectedCustomer(customer);
+    setEditData({
+      name: customer.CINA || '',
+      phone: customer.CIPH1 || '',
+      address: customer.CIADD || '',
+      cinu: customer.CINU || 1,
+      citd: customer.CITD ? customer.CITD.split('T')[0] : '',
+    });
+    setShowEditModal(true);
+  };
+
+  const handleUpdate = async () => {
+    if (!token || !selectedCustomer) return;
+    setIsSubmitting(true);
+    try {
+      await updateCustomer(selectedCustomer.CIORG, editData, token);
+      toast({
+        title: 'تم التحديث بنجاح',
+        description: 'تم تحديث بيانات المنظمة بنجاح',
+      });
+      setShowEditModal(false);
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
+    } catch (error) {
+      toast({
+        title: 'فشل التحديث',
+        description: error instanceof Error ? error.message : 'حدث خطأ غير متوقع',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (org: string) => {
+    if (!token) return;
+    if (!confirm('هل أنت متأكد من حذف هذا العميل؟ سيتم حذف جميع الأجهزة المرتبطة به.')) return;
+
+    try {
+      await deleteCustomer(org, token);
+      toast({
+        title: 'تم الحذف بنجاح',
+        description: `تم حذف المنظمة ${org} بنجاح`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
+    } catch (error) {
+      toast({
+        title: 'فشل الحذف',
+        description: error instanceof Error ? error.message : 'حدث خطأ غير متوقع',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const customers = customersData?.data.customers || [];
 
   const filteredCustomers = customers.filter(
     (customer) =>
@@ -95,10 +173,6 @@ export default function CustomersPage() {
             className="pr-10"
           />
         </div>
-        <Button variant="outline" className="gap-2">
-          <Filter className="w-4 h-4" />
-          تصفية
-        </Button>
       </div>
 
       {/* Desktop Table */}
@@ -114,6 +188,7 @@ export default function CustomersPage() {
               <th>البريد الإلكتروني</th>
               <th>الهاتف</th>
               <th>عدد الأجهزة</th>
+              <th>تاريخ الانتهاء</th>
               <th>الحالة</th>
               <th>الإجراءات</th>
             </tr>
@@ -140,9 +215,15 @@ export default function CustomersPage() {
                 <td className="text-muted-foreground" dir="ltr">{customer.CIEM || '-'}</td>
                 <td className="text-muted-foreground" dir="ltr">{customer.CIPH1 || '-'}</td>
                 <td>
-                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-muted text-sm">
+                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-muted text-sm font-medium">
                     {customer.CINU} جهاز
                   </span>
+                </td>
+                <td>
+                  <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                    <Calendar className="w-4 h-4" />
+                    {customer.CITD ? new Date(customer.CITD).toLocaleDateString('ar-YE') : '-'}
+                  </div>
                 </td>
                 <td>
                   <StatusBadge status={customer.CIST === 1 ? 'active' : 'inactive'} />
@@ -155,15 +236,17 @@ export default function CustomersPage() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-40">
-                      <DropdownMenuItem className="gap-2">
-                        <Eye className="w-4 h-4" />
-                        عرض التفاصيل
-                      </DropdownMenuItem>
-                      <DropdownMenuItem className="gap-2">
+                      <DropdownMenuItem 
+                        className="gap-2"
+                        onClick={() => handleEdit(customer)}
+                      >
                         <Edit2 className="w-4 h-4" />
                         تعديل
                       </DropdownMenuItem>
-                      <DropdownMenuItem className="gap-2 text-destructive">
+                      <DropdownMenuItem 
+                        className="gap-2 text-destructive"
+                        onClick={() => handleDelete(customer.CIORG)}
+                      >
                         <Trash2 className="w-4 h-4" />
                         حذف
                       </DropdownMenuItem>
@@ -178,10 +261,91 @@ export default function CustomersPage() {
         {filteredCustomers.length === 0 && (
           <div className="p-12 text-center">
             <Building2 className="w-12 h-12 mx-auto text-muted-foreground/50 mb-4" />
-            <p className="text-muted-foreground">لا توجد نتائج</p>
+            <h3 className="text-lg font-medium text-foreground">لا يوجد عملاء</h3>
+            <p className="text-muted-foreground mt-1">
+              {searchQuery ? 'لا توجد نتائج تطابق بحثك' : 'ابدأ بإضافة أول عميل للنظام'}
+            </p>
           </div>
         )}
       </motion.div>
+
+      {/* Edit Customer Modal */}
+      <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
+        <DialogContent className="sm:max-w-md text-right" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="text-right">تعديل بيانات المنظمة</DialogTitle>
+            <DialogDescription className="text-right">
+              تحديث معلومات: {selectedCustomer?.CIORG}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2 text-right">
+              <Label htmlFor="cust-name">اسم المنظمة</Label>
+              <Input
+                id="cust-name"
+                value={editData.name}
+                onChange={(e) => setEditData({ ...editData, name: e.target.value })}
+                placeholder="اسم العميل أو المنظمة"
+              />
+            </div>
+            <div className="space-y-2 text-right">
+              <Label htmlFor="cust-phone">رقم الهاتف</Label>
+              <Input
+                id="cust-phone"
+                value={editData.phone}
+                onChange={(e) => setEditData({ ...editData, phone: e.target.value })}
+                placeholder="رقم الهاتف"
+                dir="ltr"
+              />
+            </div>
+            <div className="space-y-2 text-right">
+              <Label htmlFor="cust-address">العنوان</Label>
+              <Input
+                id="cust-address"
+                value={editData.address}
+                onChange={(e) => setEditData({ ...editData, address: e.target.value })}
+                placeholder="العنوان"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2 text-right">
+                <Label htmlFor="cust-cinu">الأجهزة المسموحة</Label>
+                <Input
+                  id="cust-cinu"
+                  type="number"
+                  min="1"
+                  value={editData.cinu}
+                  onChange={(e) => setEditData({ ...editData, cinu: parseInt(e.target.value) || 1 })}
+                />
+              </div>
+              <div className="space-y-2 text-right">
+                <Label htmlFor="cust-citd">تاريخ الانتهاء</Label>
+                <Input
+                  id="cust-citd"
+                  type="date"
+                  value={editData.citd}
+                  onChange={(e) => setEditData({ ...editData, citd: e.target.value })}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:justify-start">
+            <Button variant="outline" onClick={() => setShowEditModal(false)}>
+              إلغاء
+            </Button>
+            <Button onClick={handleUpdate} disabled={isSubmitting}>
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 ml-2 animate-spin" />
+                  جاري الحفظ...
+                </>
+              ) : (
+                'حفظ التغييرات'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Mobile Cards */}
       <div className="lg:hidden space-y-3">
@@ -210,11 +374,10 @@ export default function CustomersPage() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-40">
-                  <DropdownMenuItem className="gap-2">
-                    <Eye className="w-4 h-4" />
-                    عرض التفاصيل
-                  </DropdownMenuItem>
-                  <DropdownMenuItem className="gap-2">
+                   <DropdownMenuItem 
+                    className="gap-2"
+                    onClick={() => handleEdit(customer)}
+                  >
                     <Edit2 className="w-4 h-4" />
                     تعديل
                   </DropdownMenuItem>
@@ -237,10 +400,16 @@ export default function CustomersPage() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between pt-2 border-t border-border">
-              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-muted text-xs">
-                {customer.CINU} جهاز
-              </span>
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-border">
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-muted text-xs font-medium">
+                  {customer.CINU} جهاز
+                </span>
+                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Calendar className="w-3 h-3" />
+                  {customer.CITD ? new Date(customer.CITD).toLocaleDateString('ar-YE') : '-'}
+                </span>
+              </div>
               <StatusBadge status={customer.CIST === 1 ? 'active' : 'inactive'} />
             </div>
           </motion.div>

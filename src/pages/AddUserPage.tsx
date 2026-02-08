@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Smartphone, ArrowRight, Save, Loader2, Building2 } from 'lucide-react';
+import { Smartphone, ArrowRight, Save, Loader2, Building2, Lock, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,26 +13,30 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-
-// Mock organizations for select
-const mockOrganizations = [
-  { id: 1, name: 'شركة الأمل للتجارة' },
-  { id: 2, name: 'مؤسسة النور' },
-  { id: 3, name: 'شركة الرياض المتحدة' },
-  { id: 4, name: 'مجموعة الفجر' },
-  { id: 5, name: 'شركة الخليج للاستثمار' },
-];
+import { useQuery } from '@tanstack/react-query';
+import { getCustomers, addUser } from '@/lib/api';
+import { useAuthStore } from '@/stores/authStore';
 
 export default function AddUserPage() {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { accessToken: token } = useAuthStore();
 
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
     orgId: '',
+    pass: '',
+    detail: '',
   });
+
+  const { data: customersData, isLoading: isLoadingCustomers } = useQuery({
+    queryKey: ['customers'],
+    queryFn: getCustomers,
+  });
+
+  const customers = customersData?.data.customers || [];
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -40,21 +44,41 @@ export default function AddUserPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!token) {
+      toast({ title: 'خطأ', description: 'انتهت الجلسة، يرجى تسجيل الدخول مجدداً', variant: 'destructive' });
+      return;
+    }
+
+    const selectedOrg = customers.find(c => c.CISEQ.toString() === formData.orgId);
+    if (!selectedOrg) {
+      toast({ title: 'خطأ', description: 'يرجى اختيار المنظمة', variant: 'destructive' });
+      return;
+    }
+
     setIsLoading(true);
 
     try {
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      await addUser({
+        org: selectedOrg.CIORG,
+        name: formData.name,
+        phone: formData.phone,
+        pass: formData.pass,
+        detail: formData.detail,
+        lan: 'ar'
+      }, token);
       
       toast({
         title: 'تمت الإضافة بنجاح',
-        description: 'تم إضافة الجهاز الجديد',
+        description: 'تم إضافة الجهاز الجديد بنجاح',
       });
       
       navigate('/dashboard/users');
     } catch (error) {
+      console.error('Add user error:', error);
       toast({
         title: 'حدث خطأ',
-        description: 'فشل في إضافة الجهاز',
+        description: error instanceof Error ? error.message : 'فشل في إضافة الجهاز',
         variant: 'destructive',
       });
     } finally {
@@ -93,32 +117,64 @@ export default function AddUserPage() {
             معلومات الجهاز
           </h3>
           <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">اسم الجهاز</Label>
-              <Input
-                id="name"
-                name="name"
-                value={formData.name}
-                onChange={handleChange}
-                placeholder="مثال: جهاز المبيعات الرئيسي"
-                required
-              />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">اسم الجهاز</Label>
+                <Input
+                  id="name"
+                  name="name"
+                  value={formData.name}
+                  onChange={handleChange}
+                  placeholder="مثال: جهاز المبيعات الرئيسي"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="phone">رقم الهاتف</Label>
+                <Input
+                  id="phone"
+                  name="phone"
+                  type="tel"
+                  value={formData.phone}
+                  onChange={handleChange}
+                  placeholder="967777777777"
+                  dir="ltr"
+                  required
+                />
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="phone">رقم الهاتف</Label>
-              <Input
-                id="phone"
-                name="phone"
-                type="tel"
-                value={formData.phone}
-                onChange={handleChange}
-                placeholder="+966501234567"
-                dir="ltr"
-                required
-              />
-              <p className="text-xs text-muted-foreground">
-                رقم الهاتف المرتبط بحساب واتساب
-              </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="pass">كلمة المرور</Label>
+                <div className="relative">
+                  <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    id="pass"
+                    name="pass"
+                    type="password"
+                    value={formData.pass}
+                    onChange={handleChange}
+                    placeholder="كلمة مرور الجهاز"
+                    className="pr-10"
+                    required
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="detail">التفاصيل</Label>
+                <div className="relative">
+                  <FileText className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    id="detail"
+                    name="detail"
+                    value={formData.detail}
+                    onChange={handleChange}
+                    placeholder="موقع الجهاز أو الغرض منه"
+                    className="pr-10"
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -134,14 +190,15 @@ export default function AddUserPage() {
             <Select
               value={formData.orgId}
               onValueChange={(value) => setFormData({ ...formData, orgId: value })}
+              disabled={isLoadingCustomers}
             >
               <SelectTrigger>
-                <SelectValue placeholder="اختر المنظمة التابع لها" />
+                <SelectValue placeholder={isLoadingCustomers ? "جاري تحميل المنظمات..." : "اختر المنظمة التابع لها"} />
               </SelectTrigger>
               <SelectContent>
-                {mockOrganizations.map((org) => (
-                  <SelectItem key={org.id} value={org.id.toString()}>
-                    {org.name}
+                {customers.map((org) => (
+                  <SelectItem key={org.CISEQ} value={org.CISEQ.toString()}>
+                    {org.CINA || org.CINE || org.CIORG}
                   </SelectItem>
                 ))}
               </SelectContent>
