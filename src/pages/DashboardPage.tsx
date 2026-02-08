@@ -15,18 +15,35 @@ import {
   Minimize2,
   ChevronDown,
   ChevronUp,
+  Wifi,
+  WifiOff,
+  Timer,
+  Activity,
 } from 'lucide-react';
 import { StatsCard } from '@/components/ui/StatsCard';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { useQuery } from '@tanstack/react-query';
 import { getDashboardData } from '@/lib/api';
-import { formatDistanceToNow, parseISO } from 'date-fns';
+import { formatDistanceToNow, parseISO, format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 
 export default function DashboardPage() {
-  const { data, isLoading, error, refetch, isFetching } = useQuery({
+  const [responseTime, setResponseTime] = useState<number | null>(null);
+
+  const { data, isLoading, error, refetch, isFetching, dataUpdatedAt } = useQuery({
     queryKey: ['dashboardData'],
-    queryFn: getDashboardData,
+    queryFn: async () => {
+      const start = performance.now();
+      try {
+        const result = await getDashboardData();
+        const end = performance.now();
+        setResponseTime(Math.round(end - start));
+        return result;
+      } catch (err) {
+        setResponseTime(null);
+        throw err;
+      }
+    },
     refetchInterval: 60000,
   });
 
@@ -84,18 +101,41 @@ export default function DashboardPage() {
           <h1 className="text-xl lg:text-2xl font-bold text-foreground">لوحة التحكم</h1>
           <p className="text-sm text-muted-foreground mt-1">نظرة عامة على النظام</p>
         </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => refetch()}
-            disabled={isFetching}
-            className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-muted-foreground bg-muted/30 hover:bg-muted/50 disabled:opacity-50 rounded-full border border-border/50 transition-all hover:text-primary active:scale-95"
-            title="تحديث البيانات"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin text-primary' : ''}`} />
-            تحديث
-          </button>
-          <div className="text-xs text-muted-foreground bg-muted/30 px-3 py-1.5 rounded-full border border-border/50 hidden sm:block">
-            تحديث تلقائي كل 60 ثانية
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex items-center gap-3">
+            {/* Connection Status */}
+            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border/50 text-[10px] font-medium transition-colors ${error ? 'bg-destructive/10 text-destructive border-destructive/20' : 'bg-success/10 text-success border-success/20'}`}>
+              {error ? <WifiOff className="w-3 h-3" /> : <Wifi className="w-3 h-3 animate-pulse" />}
+              {error ? 'غير متصل' : 'متصل بالخادم'}
+            </div>
+
+            <button
+              onClick={() => refetch()}
+              disabled={isFetching}
+              className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-muted-foreground bg-muted/30 hover:bg-muted/50 disabled:opacity-50 rounded-full border border-border/50 transition-all hover:text-primary active:scale-95"
+              title="تحديث البيانات"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin text-primary' : ''}`} />
+              تحديث
+            </button>
+          </div>
+
+          <div className="flex items-center gap-4 text-[10px] text-muted-foreground whitespace-nowrap">
+            {dataUpdatedAt > 0 && (
+              <div className="flex items-center gap-1">
+                <Clock className="w-3 h-3" />
+                آخر تحديث: {format(dataUpdatedAt, 'HH:mm:ss')}
+              </div>
+            )}
+            {responseTime !== null && (
+              <div className="flex items-center gap-1">
+                <Timer className="w-3 h-3" />
+                سرعة الاستجابة: {responseTime}ms
+              </div>
+            )}
+            <div className="bg-muted/30 px-2 py-0.5 rounded border border-border/50 hidden sm:block">
+              تحديث تلقائي كل 60 ثانية
+            </div>
           </div>
         </div>
       </div>
