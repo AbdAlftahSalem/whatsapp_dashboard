@@ -9,6 +9,7 @@ import {
   Users,
   Clock,
   Loader2,
+  RefreshCw,
 } from 'lucide-react';
 import { StatsCard } from '@/components/ui/StatsCard';
 import { StatusBadge } from '@/components/ui/StatusBadge';
@@ -18,10 +19,10 @@ import { formatDistanceToNow, parseISO } from 'date-fns';
 import { ar } from 'date-fns/locale';
 
 export default function DashboardPage() {
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ['dashboardData'],
     queryFn: getDashboardData,
-    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchInterval: 60000, // Refresh every 60 seconds
   });
 
   if (isLoading) {
@@ -50,7 +51,7 @@ export default function DashboardPage() {
   const dashboardData = data?.data;
   if (!dashboardData) return null;
 
-  const { stats, proxyStatus, lastClients, lastSessions } = dashboardData;
+  const { stats, proxyStatus, lastClients, lastSessions, servers } = dashboardData;
 
   const formatDate = (dateString: string) => {
     try {
@@ -68,8 +69,19 @@ export default function DashboardPage() {
           <h1 className="text-xl lg:text-2xl font-bold text-foreground">لوحة التحكم</h1>
           <p className="text-sm text-muted-foreground mt-1">نظرة عامة على النظام</p>
         </div>
-        <div className="text-xs text-muted-foreground bg-muted/30 px-3 py-1.5 rounded-full border border-border/50">
-          تحديث تلقائي كل 30 ثانية
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => refetch()}
+            disabled={isFetching}
+            className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-muted-foreground bg-muted/30 hover:bg-muted/50 disabled:opacity-50 rounded-full border border-border/50 transition-all hover:text-primary active:scale-95"
+            title="تحديث البيانات"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin text-primary' : ''}`} />
+            تحديث
+          </button>
+          <div className="text-xs text-muted-foreground bg-muted/30 px-3 py-1.5 rounded-full border border-border/50 hidden sm:block">
+            تحديث تلقائي كل 60 ثانية
+          </div>
         </div>
       </div>
 
@@ -102,7 +114,7 @@ export default function DashboardPage() {
           subtitle="إجمالي الرسائل"
           icon={MessageSquare}
         />
-        
+
         {/* Proxy Health Card */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -126,6 +138,60 @@ export default function DashboardPage() {
             <p className="text-xs text-muted-foreground mt-1">آخر فحص: {formatDate(proxyStatus.lastCheck)}</p>
           </div>
         </motion.div>
+      </div>
+
+      {/* Servers Section */}
+      <div className="space-y-4">
+
+        {(!servers || servers.length === 0) ? (
+          <div className="p-8 text-center bg-muted/10 rounded-xl border border-dashed border-border/50">
+            <Server className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
+            <p className="text-sm text-muted-foreground">لا توجد بيانات للخوادم حالياً</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {servers.map((server, index) => (
+              <motion.div
+                key={server.serverCode}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.05 * index }}
+                className="stats-card p-4 hover:shadow-lg transition-all"
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <Server className="w-4 h-4 text-primary" />
+                    </div>
+                    <div>
+                      <span className="font-bold text-sm block leading-none">{server.serverCode}</span>
+                      <span className="text-[10px] text-muted-foreground uppercase">{server.type}</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-1">
+                    <StatusBadge status={server.status === 'Active' ? 'active' : 'inactive'} />
+                    <span className="text-[9px] text-muted-foreground">{server.ip}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-muted-foreground">الجلسات المتصلة</span>
+                    <span className="font-medium text-foreground">
+                      {server.connectedSessions.toLocaleString('ar-SA')} / {server.maxSessions.toLocaleString('ar-SA')}
+                    </span>
+                  </div>
+                  <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-primary transition-all duration-700"
+                      style={{ width: `${Math.max(5, Math.min((server.connectedSessions / server.maxSessions) * 100, 100))}%` }}
+                    />
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Recent Lists */}
@@ -205,45 +271,6 @@ export default function DashboardPage() {
         </motion.div>
       </div>
 
-      {/* Quick Stats Summary */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
-        <div className="flex items-center gap-3 p-3 lg:p-4 rounded-xl bg-success/5 border border-success/20">
-          <div className="w-8 lg:w-10 h-8 lg:h-10 rounded-lg bg-success/10 flex items-center justify-center shrink-0">
-            <CheckCircle className="w-4 lg:w-5 h-4 lg:h-5 text-success" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-lg lg:text-2xl font-bold text-success">{stats.readySessions.toLocaleString('ar-SA')}</p>
-            <p className="text-xs text-muted-foreground truncate">جلسات جاهزة</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3 p-3 lg:p-4 rounded-xl bg-destructive/5 border border-destructive/20">
-          <div className="w-8 lg:w-10 h-8 lg:h-10 rounded-lg bg-destructive/10 flex items-center justify-center shrink-0">
-            <XCircle className="w-4 lg:w-5 h-4 lg:h-5 text-destructive" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-lg lg:text-2xl font-bold text-destructive">{stats.notReadySessions.toLocaleString('ar-SA')}</p>
-            <p className="text-xs text-muted-foreground truncate">غير جاهزة</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3 p-3 lg:p-4 rounded-xl bg-primary/5 border border-primary/20">
-          <div className="w-8 lg:w-10 h-8 lg:h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-            <Building2 className="w-4 lg:w-5 h-4 lg:h-5 text-primary" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-lg lg:text-2xl font-bold text-primary">{stats.totalClients.toLocaleString('ar-SA')}</p>
-            <p className="text-xs text-muted-foreground truncate">عميل مسجل</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3 p-3 lg:p-4 rounded-xl bg-warning/5 border border-warning/20">
-          <div className="w-8 lg:w-10 h-8 lg:h-10 rounded-lg bg-warning/10 flex items-center justify-center shrink-0">
-            <MessageSquare className="w-4 lg:w-5 h-4 lg:h-5 text-warning" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-lg lg:text-2xl font-bold text-warning">{stats.totalSentMessages.toLocaleString('ar-SA')}</p>
-            <p className="text-xs text-muted-foreground truncate">رسالة مرسلة</p>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

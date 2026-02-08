@@ -20,6 +20,15 @@ export interface DashboardData {
       email: string | null;
       registeredAt: string;
     }>;
+    servers: Array<{
+      serverCode: string;
+      type: string;
+      ip: string;
+      port: number;
+      status: string;
+      maxSessions: number;
+      connectedSessions: number;
+    }>;
     lastSessions: Array<{
       name: string;
       clientName: string;
@@ -177,7 +186,7 @@ export async function addCustomer(data: AddCustomerRequest, token: string): Prom
     },
     body: JSON.stringify(data),
   });
-  
+
   const result = await response.json();
   console.log('Add Customer Response:', result);
 
