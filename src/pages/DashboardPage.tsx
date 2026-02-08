@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   Building2,
@@ -10,6 +11,10 @@ import {
   Clock,
   Loader2,
   RefreshCw,
+  Maximize2,
+  Minimize2,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { StatsCard } from '@/components/ui/StatsCard';
 import { StatusBadge } from '@/components/ui/StatusBadge';
@@ -22,8 +27,18 @@ export default function DashboardPage() {
   const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ['dashboardData'],
     queryFn: getDashboardData,
-    refetchInterval: 60000, // Refresh every 60 seconds
+    refetchInterval: 60000,
   });
+
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
+    servers: true,
+    customers: false,
+    sessions: false,
+  });
+
+  const toggleSection = (section: string) => {
+    setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
+  };
 
   if (isLoading) {
     return (
@@ -142,70 +157,97 @@ export default function DashboardPage() {
 
       {/* Servers Section */}
       <div className="space-y-4">
-
-        {(!servers || servers.length === 0) ? (
-          <div className="p-8 text-center bg-muted/10 rounded-xl border border-dashed border-border/50">
-            <Server className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
-            <p className="text-sm text-muted-foreground">لا توجد بيانات للخوادم حالياً</p>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-foreground">حالة الخوادم</h2>
+            <div className="px-2 py-0.5 rounded text-[10px] bg-primary/10 text-primary font-medium">
+              بث مباشر
+            </div>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {servers.map((server, index) => (
-              <motion.div
-                key={server.serverCode}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.05 * index }}
-                className="stats-card p-4 hover:shadow-lg transition-all"
-              >
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                      <Server className="w-4 h-4 text-primary" />
-                    </div>
-                    <div>
-                      <span className="font-bold text-sm block leading-none">{server.serverCode}</span>
-                      <span className="text-[10px] text-muted-foreground uppercase">{server.type}</span>
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <StatusBadge status={server.status === 'Active' ? 'active' : 'inactive'} />
-                    <span className="text-[9px] text-muted-foreground">{server.ip}</span>
-                  </div>
-                </div>
+          <button
+            onClick={() => toggleSection('servers')}
+            className="p-1.5 hover:bg-muted rounded-md transition-colors text-muted-foreground"
+          >
+            {expandedSections.servers ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
+        </div>
 
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-muted-foreground">الجلسات المتصلة</span>
-                    <span className="font-medium text-foreground">
-                      {server.connectedSessions.toLocaleString('ar-SA')} / {server.maxSessions.toLocaleString('ar-SA')}
-                    </span>
+        {expandedSections.servers && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {(!servers || servers.length === 0) ? (
+              <div className="col-span-full p-8 text-center bg-muted/10 rounded-xl border border-dashed border-border/50">
+                <Server className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">لا توجد بيانات للخوادم حالياً</p>
+              </div>
+            ) : (
+              servers.map((server, index) => (
+                <motion.div
+                  key={server.serverCode}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.05 * index }}
+                  className="stats-card p-4 hover:shadow-lg transition-all"
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                        <Server className="w-4 h-4 text-primary" />
+                      </div>
+                      <div>
+                        <span className="font-bold text-sm block leading-none">{server.serverCode}</span>
+                        <span className="text-[10px] text-muted-foreground uppercase">{server.type}</span>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-1">
+                      <StatusBadge status={server.status === 'Active' ? 'active' : 'inactive'} />
+                      <span className="text-[9px] text-muted-foreground">{server.ip}</span>
+                    </div>
                   </div>
-                  <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-primary transition-all duration-700"
-                      style={{ width: `${Math.max(5, Math.min((server.connectedSessions / server.maxSessions) * 100, 100))}%` }}
-                    />
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-muted-foreground">الجلسات المتصلة</span>
+                      <span className="font-medium text-foreground">
+                        {server.connectedSessions.toLocaleString('ar-SA')} / {server.maxSessions.toLocaleString('ar-SA')}
+                      </span>
+                    </div>
+                    <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-primary transition-all duration-700"
+                        style={{ width: `${Math.max(5, Math.min((server.connectedSessions / server.maxSessions) * 100, 100))}%` }}
+                      />
+                    </div>
                   </div>
-                </div>
-              </motion.div>
-            ))}
+                </motion.div>
+              ))
+            )}
           </div>
         )}
       </div>
 
       {/* Recent Lists */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6">
         {/* Recent Customers */}
         <motion.div
+          layout
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="stats-card"
+          transition={{ duration: 0.3 }}
+          className={`stats-card ${expandedSections.customers ? 'lg:col-span-12' : 'lg:col-span-6'}`}
         >
+          {/* ... inner content matches ... */}
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-lg font-semibold text-foreground">آخر 5 عملاء مسجلين</h3>
-            <Users className="w-5 h-5 text-muted-foreground" />
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => toggleSection('customers')}
+                className="p-1 hover:bg-muted rounded-md transition-colors text-muted-foreground"
+                title={expandedSections.customers ? "تصغير" : "توسيع"}
+              >
+                {expandedSections.customers ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+              </button>
+              <Users className="w-5 h-5 text-muted-foreground" />
+            </div>
           </div>
           <div className="space-y-3">
             {lastClients.map((customer, index) => (
@@ -235,14 +277,24 @@ export default function DashboardPage() {
 
         {/* Recent Users/Sessions */}
         <motion.div
+          layout
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="stats-card"
+          transition={{ duration: 0.3 }}
+          className={`stats-card ${expandedSections.sessions ? 'lg:col-span-12' : 'lg:col-span-6'}`}
         >
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-lg font-semibold text-foreground">آخر 5 جلسات مسجلة</h3>
-            <Smartphone className="w-5 h-5 text-muted-foreground" />
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => toggleSection('sessions')}
+                className="p-1 hover:bg-muted rounded-md transition-colors text-muted-foreground"
+                title={expandedSections.sessions ? "تصغير" : "توسيع"}
+              >
+                {expandedSections.sessions ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+              </button>
+              <Smartphone className="w-5 h-5 text-muted-foreground" />
+            </div>
           </div>
           <div className="space-y-3">
             {lastSessions.map((session, index) => (
