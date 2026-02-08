@@ -15,22 +15,29 @@ export default function AddCustomerPage() {
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
-    firstName: '',
-    secondName: '',
-    thirdName: '',
-    phone: '',
-    secondPhone: '',
-    email: '',
-    company: '',
-    workType: '',
-    address: '',
-    cinu: '1',
-    citd: '',
+    name: '',       // name
+    name2: '',      // name2
+    name3: '',      // name3
+    detail: '',     // detail
+    phone: '',      // phone
+    phone2: '',     // phone2
+    phone3: '',     // phone3
+    address: '',    // address
+    webSite: '',    // webSite
+    email: '',      // email
+    country: 'YE',  // country
+    manager: '',    // manager
+    lan: 'ar',      // lan
+    ciid: '',       // ciid
+    jtid: '0',      // jtid
+    suTyp: '1',     // suTyp
+    cinu: '1',      // cinu
+    citd: '',       // citd
   });
 
   const { accessToken: token } = useAuthStore();
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
@@ -44,29 +51,35 @@ export default function AddCustomerPage() {
     setIsLoading(true);
 
     try {
-      const today = new Promise(resolve => resolve(new Date().toISOString().split('T')[0]));
-      const startDate = await today as string;
+      const today = new Date().toISOString().split('T')[0];
 
       await addCustomer({
-        name: formData.company,
-        name2: `${formData.firstName} ${formData.secondName} ${formData.thirdName}`.trim(),
-        detail: formData.workType,
+        name: formData.name,
+        name2: formData.name2,
+        name3: formData.name3,
+        detail: formData.detail,
         phone: formData.phone,
+        phone2: formData.phone2,
+        phone3: formData.phone3,
+        address: formData.address,
+        webSite: formData.webSite,
         email: formData.email,
-        address: formData.address || 'اليمن',
-        country: 'YE',
-        lan: 'ar',
-        suTyp: 1,
+        country: formData.country,
+        manager: formData.manager,
+        lan: formData.lan,
+        ciid: formData.ciid || 'O',
+        jtid: parseInt(formData.jtid),
+        suTyp: parseInt(formData.suTyp),
         cinu: parseInt(formData.cinu),
-        cifd: startDate,
+        cifd: today,
         citd: formData.citd,
       }, token);
-      
+
       toast({
         title: 'تمت الإضافة بنجاح',
         description: 'تم إضافة العميل الجديد وتفعيل المنظمة',
       });
-      
+
       navigate('/dashboard/customers');
     } catch (error) {
       console.error('Add customer error:', error);
@@ -81,7 +94,7 @@ export default function AddCustomerPage() {
   };
 
   return (
-    <div className="max-w-3xl">
+    <div className="max-w-4xl pb-12">
       {/* Header */}
       <div className="flex items-center gap-4 mb-8">
         <Button
@@ -93,7 +106,7 @@ export default function AddCustomerPage() {
         </Button>
         <div>
           <h1 className="text-2xl font-bold text-foreground">إضافة عميل جديد</h1>
-          <p className="text-muted-foreground mt-1">تسجيل منظمة جديدة في النظام</p>
+          <p className="text-muted-foreground mt-1">تسجيل كافة بيانات المنظمة والمسؤول</p>
         </div>
       </div>
 
@@ -102,79 +115,115 @@ export default function AddCustomerPage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         onSubmit={handleSubmit}
-        className="stats-card space-y-6"
+        className="stats-card space-y-8"
       >
-        {/* Personal Info */}
-        <div>
+        {/* Core Names */}
+        <div className="space-y-4">
           <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
             <Building2 className="w-5 h-5 text-primary" />
-            معلومات العميل
+            البيانات الأساسية
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="firstName">الاسم الأول</Label>
+              <Label htmlFor="name">الاسم الرئيسي (الأول)</Label>
               <Input
-                id="firstName"
-                name="firstName"
-                value={formData.firstName}
+                id="name"
+                name="name"
+                value={formData.name}
                 onChange={handleChange}
-                placeholder="أدخل الاسم الأول"
+                placeholder="اسم العميل الرئيسي"
                 required
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="secondName">الاسم الثاني</Label>
+              <Label htmlFor="name2">الاسم الثاني</Label>
               <Input
-                id="secondName"
-                name="secondName"
-                value={formData.secondName}
+                id="name2"
+                name="name2"
+                value={formData.name2}
                 onChange={handleChange}
-                placeholder="أدخل الاسم الثاني"
+                placeholder="الاسم الثاني"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="thirdName">الاسم الثالث</Label>
+              <Label htmlFor="name3">الاسم الثالث</Label>
               <Input
-                id="thirdName"
-                name="thirdName"
-                value={formData.thirdName}
+                id="name3"
+                name="name3"
+                value={formData.name3}
                 onChange={handleChange}
-                placeholder="أدخل الاسم الثالث"
+                placeholder="الاسم الثالث"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+            <div className="space-y-2">
+              <Label htmlFor="detail">طلب العميل / التفاصيل</Label>
+              <Input
+                id="detail"
+                name="detail"
+                value={formData.detail}
+                onChange={handleChange}
+                placeholder="أدخل تفاصيل الطلب أو النشاط"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="manager">مدير المنظمة</Label>
+              <Input
+                id="manager"
+                name="manager"
+                value={formData.manager}
+                onChange={handleChange}
+                placeholder="اسم الشخص المسؤول"
               />
             </div>
           </div>
         </div>
 
         {/* Contact Info */}
-        <div className="border-t border-border pt-6">
-          <h3 className="text-lg font-semibold text-foreground mb-4">معلومات الاتصال</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="border-t border-border pt-6 space-y-4">
+          <h3 className="text-lg font-semibold text-foreground mb-4">بيانات الاتصال والعنوان</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="phone">رقم الهاتف</Label>
+              <Label htmlFor="phone">رقم الهاتف (أساسي)</Label>
               <Input
                 id="phone"
                 name="phone"
                 type="tel"
                 value={formData.phone}
                 onChange={handleChange}
-                placeholder="+966501234567"
+                placeholder="+966..."
                 dir="ltr"
                 required
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="secondPhone">رقم الهاتف الثاني</Label>
+              <Label htmlFor="phone2">رقم الهاتف 2</Label>
               <Input
-                id="secondPhone"
-                name="secondPhone"
+                id="phone2"
+                name="phone2"
                 type="tel"
-                value={formData.secondPhone}
+                value={formData.phone2}
                 onChange={handleChange}
-                placeholder="+966507654321"
+                placeholder="رقم آخر"
                 dir="ltr"
               />
             </div>
-            <div className="space-y-2 md:col-span-1">
+            <div className="space-y-2">
+              <Label htmlFor="phone3">رقم الهاتف 3</Label>
+              <Input
+                id="phone3"
+                name="phone3"
+                type="tel"
+                value={formData.phone3}
+                onChange={handleChange}
+                placeholder="رقم إضافي"
+                dir="ltr"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
               <Label htmlFor="email">البريد الإلكتروني</Label>
               <Input
                 id="email"
@@ -182,12 +231,25 @@ export default function AddCustomerPage() {
                 type="email"
                 value={formData.email}
                 onChange={handleChange}
-                placeholder="example@company.com"
+                placeholder="email@example.com"
                 dir="ltr"
                 required
               />
             </div>
-            <div className="space-y-2 md:col-span-1">
+            <div className="space-y-2">
+              <Label htmlFor="webSite">الموقع الإلكتروني</Label>
+              <Input
+                id="webSite"
+                name="webSite"
+                value={formData.webSite}
+                onChange={handleChange}
+                placeholder="www.website.com"
+                dir="ltr"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
               <Label htmlFor="address">العنوان</Label>
               <div className="relative">
                 <MapPin className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -196,48 +258,59 @@ export default function AddCustomerPage() {
                   name="address"
                   value={formData.address}
                   onChange={handleChange}
-                  placeholder="مثال: صنعاء - حي حدة"
+                  placeholder="المدينة - الحي - الشارع"
                   className="pr-10"
                 />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="country">الدولة</Label>
+                <Input
+                  id="country"
+                  name="country"
+                  value={formData.country}
+                  onChange={handleChange}
+                  placeholder="YE"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="lan">اللغة</Label>
+                <select
+                  id="lan"
+                  name="lan"
+                  value={formData.lan}
+                  onChange={handleChange}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <option value="ar">العربية</option>
+                  <option value="en">الإنجليزية</option>
+                </select>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Company Info */}
-        <div className="border-t border-border pt-6">
-          <h3 className="text-lg font-semibold text-foreground mb-4">معلومات الشركة</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="company">اسم الشركة</Label>
-              <Input
-                id="company"
-                name="company"
-                value={formData.company}
-                onChange={handleChange}
-                placeholder="اسم الشركة أو المؤسسة"
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="workType">نوع العمل</Label>
-              <Input
-                id="workType"
-                name="workType"
-                value={formData.workType}
-                onChange={handleChange}
-                placeholder="مثال: تجارة إلكترونية"
-              />
-            </div>
-          </div>
-        </div>
-
         {/* Subscription Info */}
-        <div className="border-t border-border pt-6">
-          <h3 className="text-lg font-semibold text-foreground mb-4">معلومات الاشتراك</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="border-t border-border pt-6 space-y-4">
+          <h3 className="text-lg font-semibold text-foreground mb-4">بيانات الاشتراك والنظام</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="cinu">الحد الأقصى للأجهزة</Label>
+              <Label htmlFor="suTyp">نوع الاشتراك</Label>
+              <select
+                id="suTyp"
+                name="suTyp"
+                value={formData.suTyp}
+                onChange={handleChange}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <option value="1">شهري</option>
+                <option value="2">سنوي</option>
+                <option value="3">تجريبي</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="cinu">عدد الأجهزة</Label>
               <Input
                 id="cinu"
                 name="cinu"
@@ -245,21 +318,40 @@ export default function AddCustomerPage() {
                 min="1"
                 value={formData.cinu}
                 onChange={handleChange}
-                placeholder="عدد الأجهزة المسموح بها"
                 required
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="citd">تاريخ انتهاء الاشتراك</Label>
+              <Label htmlFor="ciid">الرقم العام (CIID)</Label>
               <Input
-                id="citd"
-                name="citd"
-                type="date"
-                value={formData.citd}
+                id="ciid"
+                name="ciid"
+                value={formData.ciid}
                 onChange={handleChange}
-                required
+                placeholder="مثلاً: O"
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="jtid">نوع النشاط (JTID)</Label>
+              <Input
+                id="jtid"
+                name="jtid"
+                type="number"
+                value={formData.jtid}
+                onChange={handleChange}
+              />
+            </div>
+          </div>
+          <div className="max-w-xs space-y-2">
+            <Label htmlFor="citd">تاريخ انتهاء الاشتراك</Label>
+            <Input
+              id="citd"
+              name="citd"
+              type="date"
+              value={formData.citd}
+              onChange={handleChange}
+              required
+            />
           </div>
         </div>
 
@@ -272,7 +364,7 @@ export default function AddCustomerPage() {
           >
             إلغاء
           </Button>
-          <Button type="submit" disabled={isLoading}>
+          <Button type="submit" disabled={isLoading} className="px-8">
             {isLoading ? (
               <>
                 <Loader2 className="w-4 h-4 ml-2 animate-spin" />
@@ -281,7 +373,7 @@ export default function AddCustomerPage() {
             ) : (
               <>
                 <Save className="w-4 h-4 ml-2" />
-                حفظ العميل
+                تأكيد وبدء التفعيل
               </>
             )}
           </Button>

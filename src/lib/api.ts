@@ -100,6 +100,7 @@ export interface CustomersResponse {
 
 export async function getCustomers(): Promise<CustomersResponse> {
   const response = await fetch(`${BASE_URL}/ESAPI/EWA/V3/es/get_all_cus`);
+
   if (!response.ok) {
     throw new Error('Failed to fetch customers');
   }
@@ -144,12 +145,19 @@ export async function getServers(): Promise<ServersResponse> {
 export interface AddCustomerRequest {
   name: string;
   name2?: string;
+  name3?: string;
   detail?: string;
   phone: string;
+  phone2?: string;
+  phone3?: string;
   email: string;
   address: string;
+  webSite?: string;
   country: string;
+  manager?: string;
   lan: string;
+  ciid?: string;
+  jtid?: number;
   suTyp: number;
   cinu: number;
   cifd: string;
@@ -223,7 +231,7 @@ export interface UpdateCustomerRequest {
 
 export async function updateCustomer(org: string, data: UpdateCustomerRequest, token: string): Promise<GenericResponse> {
   console.log('Update Customer Request:', { org, data });
-  const response = await fetch(`${BASE_URL}/ESAPI/EWA/V3/admin/upd_cus`, {
+  const response = await fetch(`${BASE_URL}/ESAPI/EWA/V2/es/upd_cus`, {
     method: 'POST',
     headers: {
       'Authorization': `Basic ${token}`,
