@@ -206,7 +206,7 @@ export async function addCustomer(data: AddCustomerRequest, token: string): Prom
 }
 
 export async function deleteCustomer(org: string, token: string): Promise<GenericResponse> {
-  const response = await fetch(`${BASE_URL}/ESAPI/EWA/V3/admin/del_cus`, {
+  const response = await fetch(`${BASE_URL}/ESAPI/EWA/V2/admin/del_cus`, {
     method: 'POST',
     headers: {
       'Authorization': `Basic ${token}`,
