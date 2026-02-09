@@ -257,25 +257,56 @@ export default function CustomersPage() {
   const handleExport = () => {
     if (filteredCustomers.length === 0) return;
 
-    const headers = ["معرف العميل", "الرقم العام", "الفرع", "اسم العميل", "الهاتف", "تاريخ الإضافة", "الحالة", "الأجهزة", "حد الرسائل"];
+    const headers = [
+      "معرف العميل (SEQ)",
+      "الرقم العام (ID)",
+      "كود المنظمة (ORG)",
+      "الفرع (AF1)",
+      "اسم العميل",
+      "الاسم بالإنجليزي",
+      "الهاتف",
+      "الايميل",
+      "العنوان",
+      "المدير",
+      "اللغة",
+      "تاريخ الإضافة",
+      "تاريخ البداية",
+      "تاريخ النهاية",
+      "الحالة",
+      "عدد الأجهزة",
+      "حد الرسائل اليومي"
+    ];
+
     const rows = filteredCustomers.map(c => [
       c.CISEQ,
       c.CIID || '',
+      c.CIORG,
       c.CIAF1 || 'الرئيسي',
       c.CINA || '',
+      c.CINE || '',
       c.CIPH1 || '',
+      c.CIEM || '',
+      c.CIADD || '',
+      c.CIMAN || '',
+      c.CILAN === 'ar' ? 'العربية' : 'الإنجليزية',
       c.DATEI ? new Date(c.DATEI).toLocaleDateString('ar-YE') : '',
+      c.CIFD ? new Date(c.CIFD).toLocaleDateString('ar-YE') : '',
+      c.CITD ? new Date(c.CITD).toLocaleDateString('ar-YE') : '',
       c.CIST === 1 ? 'فعال' : 'موقوف',
       c.CINU,
       c.CIDLM
     ]);
 
-    const csvContent = "\uFEFF" + [headers, ...rows].map(e => e.join(",")).join("\n");
+    // Create CSV content with UTF-8 BOM for Excel compatibility
+    const csvContent = "\uFEFF" + [headers, ...rows]
+      .map(e => e.map(val => `"${String(val).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
-    link.setAttribute("download", `customers_export_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute("download", `تقرير_العملاء_${new Date().toISOString().split('T')[0]}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
@@ -283,7 +314,7 @@ export default function CustomersPage() {
 
     toast({
       title: "تم التصدير بنجاح",
-      description: "تم تصدير البيانات إلى ملف CSV"
+      description: "تم استخراج ملف إكسل (CSV) لبيانات العملاء بنجاح"
     });
   };
 
@@ -329,12 +360,18 @@ export default function CustomersPage() {
           <h1 className="text-xl lg:text-2xl font-bold text-foreground">العملاء</h1>
           <p className="text-sm text-muted-foreground mt-1">إدارة المنظمات والاشتراكات</p>
         </div>
-        <Link to="/dashboard/customers/add">
-          <Button className="gap-2 w-full sm:w-auto">
-            <Plus className="w-4 h-4" />
-            إضافة عميل
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+          <Button variant="outline" className="gap-2" onClick={handleExport}>
+            <FileDown className="w-4 h-4" />
+            تصدير
           </Button>
-        </Link>
+          <Link to="/dashboard/customers/add" className="w-full sm:w-auto">
+            <Button className="gap-2 w-full">
+              <Plus className="w-4 h-4" />
+              إضافة عميل
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Search & Advanced Filters */}
