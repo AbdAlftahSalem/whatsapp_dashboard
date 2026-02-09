@@ -493,7 +493,7 @@ export default function CustomersPage() {
                 <th className="min-w-[140px]">النظام والاصدار</th>
                 <th className="min-w-[120px]">المسؤول</th>
                 <th className="min-w-[120px]">CIORG</th>
-                <th className="sticky left-0 bg-muted/50">الإجراءات</th>
+                <th className="sticky left-0 bg-muted/50" style={{backgroundColor: 'oklch(96.8% 0.007 247.896)'}}>الإجراءات</th>
               </tr>
             </thead>
             <tbody>
