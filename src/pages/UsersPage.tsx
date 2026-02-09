@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Smartphone,
@@ -50,9 +50,12 @@ export default function UsersPage() {
   const { toast } = useToast();
   const { accessToken: token } = useAuthStore();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const orgFilter = searchParams.get('org');
 
   const { data: usersData, isLoading, error } = useQuery({
-    queryKey: ['users'],
+    queryKey: ['users', orgFilter],
     queryFn: getAllUsers,
   });
 
@@ -68,12 +71,16 @@ export default function UsersPage() {
     }
   };
 
-  const filteredDevices = devices.filter(
-    (device) =>
+  const filteredDevices = devices.filter((device) => {
+    const matchesSearch =
       (device.SOMNA && device.SOMNA.includes(searchQuery)) ||
       (device.SOMPH && device.SOMPH.includes(searchQuery)) ||
-      (device.CIORG && device.CIORG.includes(searchQuery))
-  );
+      (device.CIORG && device.CIORG.includes(searchQuery));
+
+    const matchesOrg = !orgFilter || device.CIORG === orgFilter;
+
+    return matchesSearch && matchesOrg;
+  });
 
   const handleShowQR = (device: any) => {
     setSelectedDevice(device);
@@ -140,9 +147,9 @@ export default function UsersPage() {
       title: 'جاري إعادة تشغيل الجلسة',
       description: `إعادة تشغيل جلسة ${device.SOMNA || device.SOMDE || device.USER}...`,
     });
-    
+
     await new Promise(resolve => setTimeout(resolve, 2000));
-    
+
     toast({
       title: 'تمت إعادة التشغيل',
       description: 'تم إعادة تشغيل الجلسة بنجاح',
@@ -186,7 +193,9 @@ export default function UsersPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl lg:text-2xl font-bold text-foreground">الأجهزة</h1>
+          <h1 className="text-xl lg:text-2xl font-bold text-foreground">
+            الأجهزة {orgFilter && <span className="text-primary font-normal"> - {orgFilter}</span>}
+          </h1>
           <p className="text-sm text-muted-foreground mt-1">إدارة أجهزة واتساب والجلسات</p>
         </div>
         <Link to="/dashboard/users/add">
@@ -208,6 +217,16 @@ export default function UsersPage() {
             className="pr-10"
           />
         </div>
+        {orgFilter && (
+          <Button
+            variant="ghost"
+            className="gap-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+            onClick={() => navigate('/dashboard/users')}
+          >
+            <X className="w-4 h-4" />
+            إلغاء تصفية المنظمة
+          </Button>
+        )}
         <Button variant="outline" className="gap-2">
           <Filter className="w-4 h-4" />
           تصفية
@@ -286,20 +305,20 @@ export default function UsersPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-40">
-                       <DropdownMenuItem 
-                        className="gap-2"
-                        onClick={() => handleEdit(device)}
-                      >
-                        <RefreshCw className="w-4 h-4" />
-                        تعديل
-                      </DropdownMenuItem>
-                      <DropdownMenuItem 
-                        className="gap-2 text-destructive"
-                        onClick={() => handleDelete(device.USER)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                        حذف
-                      </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="gap-2"
+                          onClick={() => handleEdit(device)}
+                        >
+                          <RefreshCw className="w-4 h-4" />
+                          تعديل
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="gap-2 text-destructive"
+                          onClick={() => handleDelete(device.USER)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          حذف
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
@@ -376,20 +395,20 @@ export default function UsersPage() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-40">
-                 <DropdownMenuItem 
-                  className="gap-2"
-                  onClick={() => handleEdit(device)}
-                >
-                  <RefreshCw className="w-4 h-4" />
-                  تعديل
-                </DropdownMenuItem>
-                <DropdownMenuItem 
-                  className="gap-2 text-destructive"
-                  onClick={() => handleDelete(device.USER)}
-                >
-                  <Trash2 className="w-4 h-4" />
-                  حذف
-                </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="gap-2"
+                    onClick={() => handleEdit(device)}
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    تعديل
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="gap-2 text-destructive"
+                    onClick={() => handleDelete(device.USER)}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    حذف
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>

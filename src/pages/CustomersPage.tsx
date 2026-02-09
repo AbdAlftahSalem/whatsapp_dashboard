@@ -640,7 +640,7 @@ export default function CustomersPage() {
                           className="gap-2"
                           asChild
                         >
-                          <Link to={`/dashboard/users?search=${customer.CIORG}`}>
+                          <Link to={`/dashboard/users?org=${customer.CIORG}`}>
                             <Smartphone className="w-4 h-4" />
                             عرض الجلسات
                           </Link>
