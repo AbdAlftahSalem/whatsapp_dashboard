@@ -143,25 +143,25 @@ export async function getServers(): Promise<ServersResponse> {
 // --- Customer Management ---
 
 export interface AddCustomerRequest {
-  name: string;
-  name2?: string;
-  name3?: string;
-  detail?: string;
-  phone: string;
-  phone2?: string;
-  phone3?: string;
-  email: string;
-  address: string;
-  webSite?: string;
-  country: string;
-  manager?: string;
-  lan: string;
-  ciid?: string;
-  jtid?: number;
-  suTyp: number;
-  cinu: number;
-  cifd: string;
-  citd: string;
+  CINA: string;
+  CINE?: string;
+  CIN3?: string;
+  CIDE?: string;
+  CIPH1: string;
+  CIPH2?: string;
+  CIPH3?: string;
+  CIEM: string;
+  CIADD: string;
+  CIURL?: string;
+  CICO: string;
+  CIMAN?: string;
+  CILAN: string;
+  CIID?: string;
+  JTID?: number;
+  CITYP: number;
+  CINU: number;
+  CIFD: string;
+  CITD: string;
 }
 
 export interface AddCustomerResponse {
@@ -221,11 +221,37 @@ export async function deleteCustomer(org: string, token: string): Promise<Generi
 }
 
 export interface UpdateCustomerRequest {
-  name?: string;
-  phone?: string;
-  address?: string;
-  cinu?: number;
-  citd?: string;
+  CINA?: string;
+  CINE?: string;
+  CIN3?: string;
+  CIDE?: string;
+  CIPH1?: string;
+  CIPH2?: string;
+  CIPH3?: string;
+  CICO?: string;
+  CIADD?: string;
+  CIURL?: string;
+  CIEM?: string;
+  CIMAN?: string;
+  CILAN?: string;
+  CIID?: string;
+  JTID?: number;
+  CITYP?: number;
+  CIST?: number;
+  CINU?: number;
+  CIFD?: string;
+  CITD?: string;
+  CIDLM?: number;
+  CIAF1?: string;
+  CIAF2?: string;
+  CIAF3?: string;
+  CIAF4?: string;
+  CIAF5?: string;
+  CIAF6?: string;
+  CIAF7?: string;
+  CIAF8?: string;
+  CIAF9?: string;
+  CIAF10?: string;
   [key: string]: any;
 }
 

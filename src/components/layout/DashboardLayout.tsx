@@ -1,13 +1,20 @@
-import { Outlet } from 'react-router-dom';
+import { Navigate, Outlet } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { DashboardSidebar } from './DashboardSidebar';
+import { useAuthStore } from '@/stores/authStore';
 
 export function DashboardLayout() {
-  // تم إزالة حماية المصادقة مؤقتاً لعرض التصميم
+  const { isAuthenticated } = useAuthStore();
+
+  // التحقق من المصادقة قبل عرض لوحة التحكم
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <DashboardSidebar />
-      
+
       {/* Main Content - responsive margin */}
       <main className="lg:mr-64 min-h-screen">
         <motion.div

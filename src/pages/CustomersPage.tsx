@@ -50,6 +50,7 @@ export default function CustomersPage() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editData, setEditData] = useState({
     name: '',
+    nameE: '', // CINE
     detail: '',
     email: '',
     phone: '',
@@ -60,7 +61,9 @@ export default function CustomersPage() {
     system: '',
     address: '',
     cinu: 1,
-    citd: '',
+    status: 1, // CIST
+    cifd: '', // CIFD
+    citd: '', // CITD
     af2: '',
     af3: '',
     af4: '',
@@ -99,16 +102,19 @@ export default function CustomersPage() {
     setSelectedCustomer(customer);
     setEditData({
       name: customer.CINA || '',
+      nameE: customer.CINE || '',
       detail: customer.CIDE || '',
       email: customer.CIEM || '',
       phone: customer.CIPH1 || '',
       branch: customer.CIAF1 || '',
       dlm: customer.CIDLM || 0,
-      country: customer.CUCA || 'YE',
+      country: customer.CICO || 'YE',
       lan: customer.CILAN || 'ar',
       system: customer.CIAF10 || '',
       address: customer.CIADD || '',
       cinu: customer.CINU || 1,
+      status: customer.CIST || 1,
+      cifd: customer.CIFD ? customer.CIFD.split('T')[0] : '',
       citd: customer.CITD ? customer.CITD.split('T')[0] : '',
       af2: customer.CIAF2 || '',
       af3: customer.CIAF3 || '',
@@ -122,28 +128,30 @@ export default function CustomersPage() {
     if (!token || !selectedCustomer) return;
     setIsSubmitting(true);
     try {
-      // Map the user-friendly state back to API keys
+      // Map the user-friendly state back to official API keys
       const updateData = {
-        name: editData.name,
-        detail: editData.detail,
-        email: editData.email,
-        phone: editData.phone,
-        address: editData.address,
-        country: editData.country,
-        lan: editData.lan,
-        cinu: editData.cinu,
-        citd: editData.citd,
-        // Added AF fields mapping
-        af1: editData.branch,
-        af10: editData.system,
-        dlm: editData.dlm,
-        af2: editData.af2,
-        af3: editData.af3,
-        af4: editData.af4,
-        af5: editData.af5,
+        CINA: editData.name,
+        CINE: editData.nameE,
+        CIDE: editData.detail,
+        CIPH1: editData.phone,
+        CIEM: editData.email,
+        CIADD: editData.address,
+        CICO: editData.country,
+        CILAN: editData.lan,
+        CINU: editData.cinu,
+        CIST: editData.status,
+        CIFD: editData.cifd,
+        CITD: editData.citd,
+        CIDLM: editData.dlm,
+        CIAF1: editData.branch,
+        CIAF10: editData.system,
+        CIAF2: editData.af2,
+        CIAF3: editData.af3,
+        CIAF4: editData.af4,
+        CIAF5: editData.af5,
       };
 
-      await updateCFustomer(selectedCustomer.CIORG, updateData, token);
+      await updateCustomer(selectedCustomer.CIORG, updateData, token);
 
       toast({
         title: 'تم التحديث بنجاح',
@@ -402,9 +410,9 @@ export default function CustomersPage() {
               <div className="flex items-center justify-between">
                 <Label>تاريخ الإضافة</Label>
                 <div className="flex items-center gap-1">
-                  <Button variant="ghost" size="xs" onClick={() => { applyQuickDate('today'); setCurrentPage(1); }} className="text-[10px] h-6">اليوم</Button>
-                  <Button variant="ghost" size="xs" onClick={() => { applyQuickDate('week'); setCurrentPage(1); }} className="text-[10px] h-6">أسبوع</Button>
-                  <Button variant="ghost" size="xs" onClick={() => { applyQuickDate('month'); setCurrentPage(1); }} className="text-[10px] h-6">شهر</Button>
+                  <Button variant="ghost" size="sm" onClick={() => { applyQuickDate('today'); setCurrentPage(1); }} className="text-[10px] h-6">اليوم</Button>
+                  <Button variant="ghost" size="sm" onClick={() => { applyQuickDate('week'); setCurrentPage(1); }} className="text-[10px] h-6">أسبوع</Button>
+                  <Button variant="ghost" size="sm" onClick={() => { applyQuickDate('month'); setCurrentPage(1); }} className="text-[10px] h-6">شهر</Button>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -636,6 +644,27 @@ export default function CustomersPage() {
                   />
                 </div>
                 <div className="space-y-2 text-right">
+                  <Label htmlFor="edit-nameE">الاسم بالإنجليزي (CINE)</Label>
+                  <Input
+                    id="edit-nameE"
+                    value={editData.nameE}
+                    onChange={(e) => setEditData({ ...editData, nameE: e.target.value })}
+                    dir="ltr"
+                  />
+                </div>
+                <div className="space-y-2 text-right">
+                  <Label htmlFor="edit-status">الحالة (CIST)</Label>
+                  <select
+                    id="edit-status"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={editData.status}
+                    onChange={(e) => setEditData({ ...editData, status: parseInt(e.target.value) })}
+                  >
+                    <option value={1}>فعال</option>
+                    <option value={2}>موقوف</option>
+                  </select>
+                </div>
+                <div className="space-y-2 text-right">
                   <Label htmlFor="edit-detail">التفاصيل / الملاحظات</Label>
                   <Input
                     id="edit-detail"
@@ -740,14 +769,25 @@ export default function CustomersPage() {
                   onChange={(e) => setEditData({ ...editData, system: e.target.value })}
                 />
               </div>
-              <div className="space-y-2 text-right">
-                <Label htmlFor="edit-citd">تاريخ انتهاء الاشتراك</Label>
-                <Input
-                  id="edit-citd"
-                  type="date"
-                  value={editData.citd}
-                  onChange={(e) => setEditData({ ...editData, citd: e.target.value })}
-                />
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-2 text-right">
+                  <Label htmlFor="edit-cifd">تاريخ البداية (CIFD)</Label>
+                  <Input
+                    id="edit-cifd"
+                    type="date"
+                    value={editData.cifd}
+                    onChange={(e) => setEditData({ ...editData, cifd: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2 text-right">
+                  <Label htmlFor="edit-citd">تاريخ النهاية (CITD)</Label>
+                  <Input
+                    id="edit-citd"
+                    type="date"
+                    value={editData.citd}
+                    onChange={(e) => setEditData({ ...editData, citd: e.target.value })}
+                  />
+                </div>
               </div>
             </div>
 
