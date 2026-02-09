@@ -524,3 +524,28 @@ export async function restartSession(user: string): Promise<RestartSessionRespon
     throw new Error('Invalid JSON response from server');
   }
 }
+
+export async function stopSession(user: string): Promise<GenericResponse> {
+  console.log('Stopping session for user:', user);
+  const response = await fetch(`${BASE_URL}/ESAPI/EWA/V3/auth/stop_usr`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ user }),
+  });
+
+  const responseText = await response.text();
+  console.log('Stop Session Raw Response:', responseText);
+
+  if (!response.ok) {
+    throw new Error(`Failed to stop session: ${response.status} ${response.statusText}`);
+  }
+
+  try {
+    return JSON.parse(responseText);
+  } catch (e) {
+    console.error('Failed to parse stop session JSON:', e);
+    throw new Error('Invalid JSON response from server');
+  }
+}

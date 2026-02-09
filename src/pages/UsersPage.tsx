@@ -23,7 +23,7 @@ import {
   Server as ServerIcon,
 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getAllUsersFull, deleteUser, updateUser, getQrCode, restartSession } from '@/lib/api';
+import { getAllUsersFull, deleteUser, updateUser, getQrCode, restartSession, stopSession } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -177,20 +177,28 @@ export default function UsersPage() {
   };
 
   const handleDelete = async (user: string) => {
-    if (!token) return;
+    // if (!token) return; // Token might not be needed for stopSession based on API definition, but kept for consistency if needed or removed
     if (!confirm('هل أنت متأكد من حذف هذا الجهاز؟')) return;
 
     try {
-      await deleteUser(user, token);
-      toast({
-        title: 'تم الحذف بنجاح',
-        description: `تم حذف الجهاز ${user} بنجاح`,
-      });
-      queryClient.invalidateQueries({ queryKey: ['users'] });
-    } catch (error) {
+      // Using stopSession instead of deleteUser as requested for "delete session"
+      const response = await stopSession(user);
+      console.log('Stop Session Response:', response);
+
+      if (response.success || response.status) {
+        toast({
+          title: 'تم الحذف بنجاح',
+          description: `تم حذف الجهاز ${user} بنجاح`,
+        });
+        queryClient.invalidateQueries({ queryKey: ['users-full'] }); // Changed to users-full to match the query key used in this component
+      } else {
+        throw new Error(response.message || 'Failed to stop session');
+      }
+    } catch (error: any) {
+      console.error('Stop Session Error:', error);
       toast({
         title: 'فشل الحذف',
-        description: error instanceof Error ? error.message : 'حدث خطأ غير متوقع',
+        description: error.message || 'حدث خطأ غير متوقع',
         variant: 'destructive',
       });
     }
