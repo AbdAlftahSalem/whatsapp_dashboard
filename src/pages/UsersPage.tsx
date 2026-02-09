@@ -14,9 +14,16 @@ import {
   Loader2,
   Building2,
   XCircle,
+  CheckCircle2,
+  AlertCircle,
+  Wifi,
+  WifiOff,
+  AlertTriangle,
+  History,
+  Server as ServerIcon,
 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getAllUsers, deleteUser, updateUser } from '@/lib/api';
+import { getAllUsersFull, deleteUser, updateUser, getQrCode, restartSession } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -46,6 +53,8 @@ export default function UsersPage() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editData, setEditData] = useState({ name: '', detail: '', phone: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [pageSize, setPageSize] = useState(20);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const { toast } = useToast();
   const { accessToken: token } = useAuthStore();
@@ -55,39 +64,116 @@ export default function UsersPage() {
   const orgFilter = searchParams.get('org');
 
   const { data: usersData, isLoading, error } = useQuery({
-    queryKey: ['users', orgFilter],
-    queryFn: getAllUsers,
+    queryKey: ['users-full', orgFilter],
+    queryFn: getAllUsersFull,
   });
 
-  const devices = usersData?.data.Users || [];
+  const devices = usersData?.data.data || [];
 
-  const mapStatus = (status: string): any => {
-    switch (status) {
-      case 'ready': return 'authenticated';
-      case 'qr': return 'open';
-      case 'none': return 'close';
-      case 'logout': return 'close';
-      default: return 'close';
+  const SessionStatus = ({ status }: { status: string }) => {
+    const s = String(status).toLowerCase();
+    switch (s) {
+      case 'ready':
+        return (
+          <div className="flex items-center gap-1.5 text-success">
+            <Wifi className="w-4 h-4" />
+            <span className="text-xs font-medium uppercase">Ready</span>
+          </div>
+        );
+      case 'logout':
+        return (
+          <div className="flex items-center gap-1.5 text-destructive">
+            <XCircle className="w-4 h-4" />
+            <span className="text-xs font-medium uppercase">Logout</span>
+          </div>
+        );
+      case 'qr':
+        return (
+          <div className="flex items-center gap-1.5 text-warning">
+            <WifiOff className="w-4 h-4" />
+            <span className="text-xs font-medium uppercase">QR</span>
+          </div>
+        );
+      case 'authenticated':
+        return (
+          <div className="flex items-center gap-1.5 text-blue-500">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span className="text-xs font-medium uppercase">authenticated</span>
+          </div>
+        );
+      case 'maxqrcodetries':
+        return (
+          <div className="flex items-center gap-1.5 text-warning">
+            <AlertTriangle className="w-4 h-4" />
+            <span className="text-xs font-medium uppercase">MaxQR</span>
+          </div>
+        );
+      case 'none':
+        return (
+          <div className="flex items-center gap-1.5 text-muted-foreground">
+            <WifiOff className="w-4 h-4" />
+            <span className="text-xs font-medium uppercase">None</span>
+          </div>
+        );
+      default:
+        // Default "Not Ready" style if not matched above
+        return (
+          <div className="flex items-center gap-1.5 text-destructive">
+            <AlertCircle className="w-4 h-4" />
+            <span className="text-xs font-medium uppercase">{status || 'Not Ready'}</span>
+          </div>
+        );
     }
   };
 
   const filteredDevices = devices.filter((device) => {
+    const searchLower = searchQuery.toLowerCase();
     const matchesSearch =
-      (device.SOMNA && device.SOMNA.includes(searchQuery)) ||
-      (device.SOMPH && device.SOMPH.includes(searchQuery)) ||
-      (device.CIORG && device.CIORG.includes(searchQuery));
+      (device.SOMNA && device.SOMNA.toLowerCase().includes(searchLower)) ||
+      (device.user_name && device.user_name.toLowerCase().includes(searchLower)) ||
+      (device.customer_name && device.customer_name.toLowerCase().includes(searchLower)) ||
+      (device.session_id && device.session_id.includes(searchQuery)) ||
+      (device.server_name && device.server_name.toLowerCase().includes(searchLower)) ||
+      (String(device.customer_number).includes(searchQuery));
 
-    const matchesOrg = !orgFilter || device.CIORG === orgFilter;
+    const matchesOrg = !orgFilter || String(device.customer_number) === orgFilter;
 
     return matchesSearch && matchesOrg;
   });
 
-  const handleShowQR = (device: any) => {
+  const totalPages = Math.ceil(filteredDevices.length / pageSize);
+  const paginatedDevices = filteredDevices.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
+
+  const handleShowQR = async (device: any) => {
     setSelectedDevice(device);
     setIsLoadingQR(true);
     setShowQRModal(true);
-    // Simulate loading for better UX
-    setTimeout(() => setIsLoadingQR(false), 1000);
+
+    try {
+      const userId = String(device.session_id || device.user_code);
+      const response = await getQrCode(userId);
+      console.log("QR Response:", response);
+
+      const qrCode = response.data?.qr || response.data?.qrcode || (typeof response.data === 'string' ? response.data : null);
+
+      if (qrCode) {
+        setSelectedDevice((prev: any) => ({ ...prev, SOMQR: qrCode }));
+      } else {
+        console.warn('QR code not found in response data');
+      }
+    } catch (error: any) {
+      console.error('Failed to fetch QR code. Detailed Error:', error);
+      toast({
+        title: 'خطأ',
+        description: error.message || 'فشل في جلب رمز QR',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoadingQR(false);
+    }
   };
 
   const handleDelete = async (user: string) => {
@@ -113,9 +199,9 @@ export default function UsersPage() {
   const handleEdit = (device: any) => {
     setSelectedDevice(device);
     setEditData({
-      name: device.SOMNA || '',
-      detail: device.SOMDE || '',
-      phone: device.SOMPH || '',
+      name: device.SOMNA || device.user_name || device.customer_name || '',
+      detail: '',
+      phone: device.session_id || '',
     });
     setShowEditModal(true);
   };
@@ -124,7 +210,7 @@ export default function UsersPage() {
     if (!token || !selectedDevice) return;
     setIsSubmitting(true);
     try {
-      await updateUser(selectedDevice.USER, editData, token);
+      await updateUser(String(selectedDevice.session_id || selectedDevice.user_code), editData, token);
       toast({
         title: 'تم التحديث بنجاح',
         description: 'تم تحديث بيانات الجهاز بنجاح',
@@ -145,21 +231,40 @@ export default function UsersPage() {
   const handleRestartSession = async (device: any) => {
     toast({
       title: 'جاري إعادة تشغيل الجلسة',
-      description: `إعادة تشغيل جلسة ${device.SOMNA || device.SOMDE || device.USER}...`,
+      description: `إعادة تشغيل جلسة ${device.SOMNA || device.customer_name || device.session_id}...`,
     });
 
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    try {
+      const userId = String(device.session_id || device.user_code);
+      const response = await restartSession(userId);
+      console.log('Restart Session Response:', response);
 
-    toast({
-      title: 'تمت إعادة التشغيل',
-      description: 'تم إعادة تشغيل الجلسة بنجاح',
-    });
+      if (response.status || response.message) {
+        toast({
+          title: 'تمت إعادة التشغيل',
+          description: response.message || 'تم إعادة تشغيل الجلسة بنجاح',
+          variant: 'default', // Success
+        });
+        // Invalidate queries to refresh the list and show new status
+        queryClient.invalidateQueries({ queryKey: ['users-full'] });
+      } else {
+        throw new Error(response.message || 'Failed to restart session');
+      }
+
+    } catch (error: any) {
+      console.error('Restart Session Error:', error);
+      toast({
+        title: 'فشل إعادة التشغيل',
+        description: error.message || 'حدث خطأ أثناء إعادة تشغيل الجلسة',
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleDeleteSession = (device: any) => {
     toast({
       title: 'تأكيد الحذف',
-      description: `هل أنت متأكد من حذف ${device.SOMNA || device.SOMDE || device.USER}؟`,
+      description: `هل أنت متأكد من حذف ${device.SOMNA || device.customer_name || device.session_id}؟`,
       variant: 'destructive',
     });
   };
@@ -242,41 +347,59 @@ export default function UsersPage() {
         <table className="w-full">
           <thead>
             <tr>
-              <th>الجهاز</th>
-              <th>رقم الهاتف</th>
-              <th>المنظمة</th>
-              <th>الحالة</th>
-              <th>الإجراءات</th>
+              <th className="text-xs">Session ID</th>
+              <th className="text-xs">رمز المستخدم</th>
+              <th className="text-xs">رقم العميل</th>
+              <th className="text-xs">اسم الجهاز</th>
+              <th className="text-xs">السيرفر</th>
+              <th className="text-xs">رمز السيرفر</th>
+              <th className="text-xs">الحالة</th>
+              <th className="text-xs whitespace-nowrap">اليوم (نص - مرفق)</th>
+              <th className="text-xs whitespace-nowrap">الإجمالي (نص - مرفق)</th>
+              <th className="text-xs">حد الرسائل</th>
+              <th className="text-xs">آخر ظهور</th>
+              <th className="text-xs">إجراءات</th>
             </tr>
           </thead>
           <tbody>
-            {filteredDevices.map((device, index) => (
+            {paginatedDevices.map((device, index) => (
               <motion.tr
-                key={device.SOMSEQ}
+                key={device.session_id + (device.user_code || index)}
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: index * 0.05 }}
               >
+                <td className="font-mono text-[11px]">{device.session_id}</td>
+                <td className="text-[11px]">{device.user_code}</td>
+                <td className="text-[11px] font-mono text-muted-foreground">{device.customer_number}</td>
                 <td>
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center relative">
-                      <Smartphone className="w-5 h-5 text-primary" />
-                      {mapStatus(device.SOMCST) === 'authenticated' && (
-                        <span className="absolute -bottom-0.5 -left-0.5 w-3 h-3 rounded-full bg-success border-2 border-card" />
-                      )}
-                    </div>
-                    <div>
-                      <p className="font-medium text-foreground">{device.SOMNA || device.SOMDE || 'جهاز بدون اسم'}</p>
-                      <p className="text-xs text-muted-foreground">{device.USER}</p>
-                    </div>
+                  <div className="flex flex-col">
+                    <span className="font-semibold text-foreground text-sm">{device.SOMNA || device.user_name || 'بدون اسم'}</span>
+                    <span className="text-[10px] text-muted-foreground">{device.customer_name}</span>
                   </div>
                 </td>
-                <td className="text-muted-foreground font-mono text-sm" dir="ltr">
-                  {device.SOMPH || '-'}
-                </td>
-                <td className="text-muted-foreground">{device.CIORG}</td>
                 <td>
-                  <StatusBadge status={mapStatus(device.SOMCST)} />
+                  <span className="text-[11px]">{device.server_name}</span>
+                </td>
+                <td className="text-[11px] font-mono text-primary">{device.server_code}</td>
+                <td>
+                  <SessionStatus status={device.status} />
+                </td>
+                <td>
+                  <div className="flex flex-col text-[11px]">
+                    <span className="text-success font-medium">{device.today_messages}</span>
+                    <span className="text-[10px] text-muted-foreground">({device.today_text} - {device.today_attachments})</span>
+                  </div>
+                </td>
+                <td>
+                  <div className="flex flex-col text-[11px]">
+                    <span className="font-medium">{device.total_messages}</span>
+                    <span className="text-[10px] text-muted-foreground">({device.total_text} - {device.total_attachments})</span>
+                  </div>
+                </td>
+                <td className="text-[11px] font-medium text-blue-600">{device.daily_limit}</td>
+                <td className="text-[10px] text-muted-foreground whitespace-pre-wrap">
+                  {device.last_message_date ? new Date(device.last_message_date).toLocaleString('ar-YE') : '-'}
                 </td>
                 <td>
                   <div className="flex items-center gap-1">
@@ -287,7 +410,7 @@ export default function UsersPage() {
                       onClick={() => handleShowQR(device)}
                       title="عرض QR"
                     >
-                      <QrCode className="w-4 h-4" />
+                      <QrCode className="w-4 h-4 text-primary" />
                     </Button>
                     <Button
                       variant="ghost"
@@ -296,7 +419,7 @@ export default function UsersPage() {
                       onClick={() => handleRestartSession(device)}
                       title="إعادة تشغيل"
                     >
-                      <RefreshCw className="w-4 h-4" />
+                      <RefreshCw className="w-4 h-4 text-success" />
                     </Button>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -304,20 +427,20 @@ export default function UsersPage() {
                           <MoreHorizontal className="w-4 h-4" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-40">
+                      <DropdownMenuContent align="end" className="w-40 text-right">
                         <DropdownMenuItem
-                          className="gap-2"
+                          className="gap-2 justify-end"
                           onClick={() => handleEdit(device)}
                         >
-                          <RefreshCw className="w-4 h-4" />
                           تعديل
+                          <History className="w-4 h-4" />
                         </DropdownMenuItem>
                         <DropdownMenuItem
-                          className="gap-2 text-destructive"
-                          onClick={() => handleDelete(device.USER)}
+                          className="gap-2 text-destructive justify-end"
+                          onClick={() => handleDelete(String(device.session_id || device.user_code))}
                         >
-                          <Trash2 className="w-4 h-4" />
                           حذف
+                          <Trash2 className="w-4 h-4" />
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -328,7 +451,7 @@ export default function UsersPage() {
           </tbody>
         </table>
 
-        {filteredDevices.length === 0 && (
+        {paginatedDevices.length === 0 && (
           <div className="p-12 text-center">
             <Smartphone className="w-12 h-12 mx-auto text-muted-foreground/50 mb-4" />
             <p className="text-muted-foreground">لا توجد أجهزة</p>
@@ -338,9 +461,9 @@ export default function UsersPage() {
 
       {/* Mobile Cards */}
       <div className="lg:hidden space-y-3">
-        {filteredDevices.map((device, index) => (
+        {paginatedDevices.map((device, index) => (
           <motion.div
-            key={device.SOMSEQ}
+            key={device.session_id + (device.user_code || index)}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.05 }}
@@ -350,23 +473,42 @@ export default function UsersPage() {
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center relative">
                   <Smartphone className="w-5 h-5 text-primary" />
-                  {mapStatus(device.SOMCST) === 'authenticated' && (
-                    <span className="absolute -bottom-0.5 -left-0.5 w-3 h-3 rounded-full bg-success border-2 border-card" />
-                  )}
                 </div>
                 <div>
-                  <p className="font-medium text-foreground">{device.SOMNA || device.SOMDE || 'جهاز بدون اسم'}</p>
-                  <p className="text-xs text-muted-foreground font-mono" dir="ltr">{device.SOMPH || '-'}</p>
+                  <p className="font-semibold text-foreground">{device.SOMNA || device.user_name || 'جهاز بدون اسم'}</p>
+                  <p className="text-[10px] text-muted-foreground">{device.customer_name}</p>
+                  <p className="text-xs text-muted-foreground font-mono mt-0.5" dir="ltr">{device.session_id}</p>
                 </div>
               </div>
-              <StatusBadge status={mapStatus(device.SOMCST)} />
+              <SessionStatus status={device.status} />
             </div>
 
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Building2 className="w-4 h-4" />
-              <span>{device.CIORG}</span>
+            <div className="grid grid-cols-2 gap-2 text-[11px] border-t border-border pt-3">
+              <div className="space-y-1">
+                <p className="text-muted-foreground">اليوم</p>
+                <div className="flex flex-col">
+                  <span className="font-medium text-success">{device.today_messages}</span>
+                  <span className="text-[9px] text-muted-foreground">({device.today_text} - {device.today_attachments})</span>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <p className="text-muted-foreground">الإجمالي</p>
+                <div className="flex flex-col">
+                  <span className="font-medium">{device.total_messages}</span>
+                  <span className="text-[9px] text-muted-foreground">({device.total_text} - {device.total_attachments})</span>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <p className="text-muted-foreground">السيرفر</p>
+                <p className="font-medium truncate">{device.server_name}</p>
+                <p className="text-[9px] text-primary">{device.server_code}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-muted-foreground">رقم العميل</p>
+                <p className="font-medium">{device.customer_number}</p>
+                <p className="text-[9px] text-muted-foreground">Code: {device.user_code}</p>
+              </div>
             </div>
-
 
             {/* Actions */}
             <div className="flex items-center gap-2 pt-2 border-t border-border">
@@ -376,7 +518,7 @@ export default function UsersPage() {
                 className="flex-1 gap-2"
                 onClick={() => handleShowQR(device)}
               >
-                <QrCode className="w-4 h-4" />
+                <QrCode className="w-4 h-4 text-primary" />
                 QR
               </Button>
               <Button
@@ -385,7 +527,7 @@ export default function UsersPage() {
                 className="flex-1 gap-2"
                 onClick={() => handleRestartSession(device)}
               >
-                <RefreshCw className="w-4 h-4" />
+                <RefreshCw className="w-4 h-4 text-success" />
                 إعادة تشغيل
               </Button>
               <DropdownMenu>
@@ -394,17 +536,17 @@ export default function UsersPage() {
                     <MoreHorizontal className="w-4 h-4" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-40">
+                <DropdownMenuContent align="end" className="w-40 text-right">
                   <DropdownMenuItem
-                    className="gap-2"
+                    className="gap-2 justify-end"
                     onClick={() => handleEdit(device)}
                   >
-                    <RefreshCw className="w-4 h-4" />
                     تعديل
+                    <History className="w-4 h-4" />
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     className="gap-2 text-destructive"
-                    onClick={() => handleDelete(device.USER)}
+                    onClick={() => handleDelete(String(device.session_id || device.user_code))}
                   >
                     <Trash2 className="w-4 h-4" />
                     حذف
@@ -424,18 +566,63 @@ export default function UsersPage() {
       </div>
 
       {/* Pagination */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-        <p className="text-sm text-muted-foreground">
-          عرض {filteredDevices.length} من {devices.length} جهاز
-        </p>
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-4 border-t">
+        <div className="flex items-center gap-4">
+          <p className="text-sm text-muted-foreground">
+            عرض {paginatedDevices.length} من {filteredDevices.length} جهاز
+          </p>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">عرض:</span>
+            <select
+              className="text-xs bg-muted border rounded p-1"
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+            >
+              <option value={20}>20 جلسة</option>
+              <option value={50}>50 جلسة</option>
+            </select>
+          </div>
+        </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" disabled>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={currentPage === 1}
+            onClick={() => setCurrentPage(prev => prev - 1)}
+          >
             السابق
           </Button>
-          <Button variant="outline" size="sm" className="bg-primary text-primary-foreground">
-            1
-          </Button>
-          <Button variant="outline" size="sm">
+          <div className="flex items-center gap-1">
+            {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+              // Simple pagination logic to show current +/- 2 pages
+              let pageNum = i + 1;
+              if (totalPages > 5 && currentPage > 3) {
+                pageNum = currentPage - 3 + pageNum;
+                if (pageNum > totalPages) pageNum = totalPages - (5 - i - 1);
+              }
+
+              return (
+                <Button
+                  key={pageNum}
+                  variant={currentPage === pageNum ? 'default' : 'outline'}
+                  size="sm"
+                  className="w-8 h-8 p-0"
+                  onClick={() => setCurrentPage(pageNum)}
+                >
+                  {pageNum}
+                </Button>
+              );
+            })}
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={currentPage === totalPages}
+            onClick={() => setCurrentPage(prev => prev + 1)}
+          >
             التالي
           </Button>
         </div>
@@ -499,7 +686,7 @@ export default function UsersPage() {
               <DialogHeader>
                 <DialogTitle className="text-right">تعديل بيانات الجهاز</DialogTitle>
                 <DialogDescription className="text-right">
-                  تحديث معلومات الجهاز: {selectedDevice?.USER}
+                  تحديث معلومات الجهاز: {selectedDevice?.SOMNA || selectedDevice?.customer_name}
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
