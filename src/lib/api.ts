@@ -140,69 +140,6 @@ export async function getServers(): Promise<ServersResponse> {
   return response.json();
 }
 
-export interface AddServerRequest {
-  SISN: string;
-  SIIP: string;
-  SIPO: number;
-  SITY: string;
-  SIMS: number;
-  [key: string]: any;
-}
-
-export interface UpdateServerRequest {
-  SISN?: string;
-  SIIP?: string;
-  SIPO?: number;
-  SITY?: string;
-  SIMS?: number;
-  [key: string]: any;
-}
-
-export async function addServer(data: AddServerRequest, token: string): Promise<GenericResponse> {
-  const response = await fetch(`${BASE_URL}/ESAPI/SERVER/add`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Basic ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(data),
-  });
-  if (!response.ok) {
-    throw new Error('Failed to add server');
-  }
-  return response.json();
-}
-
-export async function updateServer(siseq: number, data: UpdateServerRequest, token: string): Promise<GenericResponse> {
-  const response = await fetch(`${BASE_URL}/ESAPI/SERVER/update`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Basic ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ siseq, ...data }),
-  });
-  if (!response.ok) {
-    throw new Error('Failed to update server');
-  }
-  return response.json();
-}
-
-export async function deleteServer(siseq: number, token: string): Promise<GenericResponse> {
-  const response = await fetch(`${BASE_URL}/ESAPI/SERVER/delete`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Basic ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ siseq }),
-  });
-  if (!response.ok) {
-    throw new Error('Failed to delete server');
-  }
-  return response.json();
-}
-
 // --- Customer Management ---
 
 export interface AddCustomerRequest {
@@ -479,23 +416,6 @@ export interface UsersResponse {
   };
 }
 
-<<<<<<< HEAD
-export interface LogsResponse {
-  status: boolean;
-  message: string;
-  data: {
-    Logs: Array<{
-      SASEQ: number;
-      SADAT: string;
-      SATYP: string;
-      SATOPI: string;
-      SAMESS: string;
-      CIORG: string;
-      SARO: string;
-      SAFN: string;
-      SAIMP: string;
-      SAIP: string;
-=======
 export async function getAllUsers(): Promise<UsersResponse> {
   const response = await fetch(`${BASE_URL}/ESAPI/EWA/V3/es/get_all_usr`);
   if (!response.ok) {
@@ -526,52 +446,11 @@ export interface FullUsersResponse {
       today_attachments: number;
       server_code: string;
       user_name: string;
->>>>>>> 9da9d54a7bae81222417c430103aebdf5f1ab22b
       [key: string]: any;
     }>;
   };
 }
 
-<<<<<<< HEAD
-export async function getLogs(): Promise<LogsResponse> {
-  const response = await fetch(`${BASE_URL}/ESAPI/EWA/V3/es/get_all_log`);
-  if (!response.ok) {
-    throw new Error('Failed to fetch logs');
-  }
-  return response.json();
-}
-
-export interface BackupResponse {
-  status: boolean;
-  message: string;
-  data: {
-    backups: Array<{
-      filename: string;
-      size: string;
-      createdAt: string;
-      type: string;
-    }>;
-  };
-}
-
-export async function getBackups(): Promise<BackupResponse> {
-  // Placeholder for backup API
-  return {
-    status: true,
-    message: 'Success',
-    data: { backups: [] }
-  };
-}
-
-export async function createBackup(): Promise<GenericResponse> {
-  // Placeholder for create backup API
-  return {
-    success: true,
-    message: 'Backup process started',
-    data: {},
-    code: 200
-  };
-=======
 export async function getAllUsersFull(): Promise<FullUsersResponse> {
   const response = await fetch(`${BASE_URL}/ESAPI/EWA/V3/es/get_all_usr_full`);
   if (!response.ok) {
@@ -669,5 +548,4 @@ export async function stopSession(user: string): Promise<GenericResponse> {
     console.error('Failed to parse stop session JSON:', e);
     throw new Error('Invalid JSON response from server');
   }
->>>>>>> 9da9d54a7bae81222417c430103aebdf5f1ab22b
 }
