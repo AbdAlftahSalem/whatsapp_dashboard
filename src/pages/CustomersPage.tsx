@@ -128,28 +128,47 @@ export default function CustomersPage() {
     if (!token || !selectedCustomer) return;
     setIsSubmitting(true);
     try {
-      // Map the user-friendly state back to official API keys
-      const updateData = {
-        CINA: editData.name,
-        CINE: editData.nameE,
-        CIDE: editData.detail,
-        CIPH1: editData.phone,
-        CIEM: editData.email,
-        CIADD: editData.address,
-        CICO: editData.country,
-        CILAN: editData.lan,
-        CINU: editData.cinu,
-        CIST: editData.status,
-        CIFD: editData.cifd,
-        CITD: editData.citd,
-        CIDLM: editData.dlm,
-        CIAF1: editData.branch,
-        CIAF10: editData.system,
-        CIAF2: editData.af2,
-        CIAF3: editData.af3,
-        CIAF4: editData.af4,
-        CIAF5: editData.af5,
+      const updateData: any = {};
+
+      // Helper function to add to updateData if value changed
+      const addIfChanged = (apiKey: string, newValue: any, originalValue: any, isDate = false) => {
+        let normalizedOriginal = originalValue === null || originalValue === undefined ? '' : originalValue;
+        let normalizedNew = newValue === null || newValue === undefined ? '' : newValue;
+
+        if (isDate && normalizedOriginal) {
+          normalizedOriginal = normalizedOriginal.split('T')[0];
+        }
+
+        if (normalizedNew !== normalizedOriginal) {
+          updateData[apiKey] = newValue;
+        }
       };
+
+      addIfChanged('CINA', editData.name, selectedCustomer.CINA);
+      addIfChanged('CINE', editData.nameE, selectedCustomer.CINE);
+      addIfChanged('CIDE', editData.detail, selectedCustomer.CIDE);
+      addIfChanged('CIPH1', editData.phone, selectedCustomer.CIPH1);
+      addIfChanged('CIEM', editData.email, selectedCustomer.CIEM);
+      addIfChanged('CIADD', editData.address, selectedCustomer.CIADD);
+      addIfChanged('CICO', editData.country, selectedCustomer.CICO);
+      addIfChanged('CILAN', editData.lan, selectedCustomer.CILAN);
+      addIfChanged('CINU', editData.cinu, selectedCustomer.CINU);
+      addIfChanged('CIST', editData.status, selectedCustomer.CIST);
+      addIfChanged('CIFD', editData.cifd, selectedCustomer.CIFD, true);
+      addIfChanged('CITD', editData.citd, selectedCustomer.CITD, true);
+      addIfChanged('CIDLM', editData.dlm, selectedCustomer.CIDLM);
+      addIfChanged('CIAF1', editData.branch, selectedCustomer.CIAF1);
+      addIfChanged('CIAF10', editData.system, selectedCustomer.CIAF10);
+      addIfChanged('CIAF2', editData.af2, selectedCustomer.CIAF2);
+      addIfChanged('CIAF3', editData.af3, selectedCustomer.CIAF3);
+      addIfChanged('CIAF4', editData.af4, selectedCustomer.CIAF4);
+      addIfChanged('CIAF5', editData.af5, selectedCustomer.CIAF5);
+
+      if (Object.keys(updateData).length === 0) {
+        toast({ title: 'تنبيه', description: 'لم يتم تغيير أي بيانات' });
+        setShowEditModal(false);
+        return;
+      }
 
       await updateCustomer(selectedCustomer.CIORG, updateData, token);
 
