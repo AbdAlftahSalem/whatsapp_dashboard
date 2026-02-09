@@ -44,7 +44,7 @@ export default function AddUserPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!token) {
       toast({ title: 'خطأ', description: 'انتهت الجلسة، يرجى تسجيل الدخول مجدداً', variant: 'destructive' });
       return;
@@ -59,20 +59,23 @@ export default function AddUserPage() {
     setIsLoading(true);
 
     try {
-      await addUser({
+      const payload: any = {
         org: selectedOrg.CIORG,
         name: formData.name,
-        phone: formData.phone,
-        pass: formData.pass,
-        detail: formData.detail,
         lan: 'ar'
-      }, token);
-      
+      };
+
+      if (formData.phone) payload.phone = formData.phone;
+      if (formData.pass) payload.pass = formData.pass;
+      if (formData.detail) payload.detail = formData.detail;
+
+      await addUser(payload, token);
+
       toast({
         title: 'تمت الإضافة بنجاح',
         description: 'تم إضافة الجهاز الجديد بنجاح',
       });
-      
+
       navigate('/dashboard/users');
     } catch (error) {
       console.error('Add user error:', error);
@@ -137,9 +140,8 @@ export default function AddUserPage() {
                   type="tel"
                   value={formData.phone}
                   onChange={handleChange}
-                  placeholder="967777777777"
+                  placeholder="967777777777 (اختياري)"
                   dir="ltr"
-                  required
                 />
               </div>
             </div>
@@ -155,9 +157,8 @@ export default function AddUserPage() {
                     type="password"
                     value={formData.pass}
                     onChange={handleChange}
-                    placeholder="كلمة مرور الجهاز"
+                    placeholder="كلمة المرور (تلقائي إذا ترك فارغاً)"
                     className="pr-10"
-                    required
                   />
                 </div>
               </div>
@@ -198,7 +199,10 @@ export default function AddUserPage() {
               <SelectContent>
                 {customers.map((org) => (
                   <SelectItem key={org.CISEQ} value={org.CISEQ.toString()}>
-                    {org.CINA || org.CINE || org.CIORG}
+                    <div className="flex flex-col items-start">
+                      <span className="font-medium">{org.CINA || org.CINE || 'بدون اسم'}</span>
+                      <span className="text-[10px] text-muted-foreground">{org.CIORG}</span>
+                    </div>
                   </SelectItem>
                 ))}
               </SelectContent>

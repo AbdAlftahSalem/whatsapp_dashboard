@@ -206,25 +206,25 @@ export async function deleteServer(siseq: number, token: string): Promise<Generi
 // --- Customer Management ---
 
 export interface AddCustomerRequest {
-  name: string;
-  name2?: string;
-  name3?: string;
-  detail?: string;
-  phone: string;
-  phone2?: string;
-  phone3?: string;
-  email: string;
-  address: string;
-  webSite?: string;
-  country: string;
-  manager?: string;
-  lan: string;
-  ciid?: string;
-  jtid?: number;
-  suTyp: number;
-  cinu: number;
-  cifd: string;
-  citd: string;
+  CINA: string;
+  CINE?: string;
+  CIN3?: string;
+  CIDE?: string;
+  CIPH1: string;
+  CIPH2?: string;
+  CIPH3?: string;
+  CIEM: string;
+  CIADD: string;
+  CIURL?: string;
+  CICO: string;
+  CIMAN?: string;
+  CILAN: string;
+  CIID?: string;
+  JTID?: number;
+  CITYP: number;
+  CINU: number;
+  CIFD: string;
+  CITD: string;
 }
 
 export interface AddCustomerResponse {
@@ -269,7 +269,7 @@ export async function addCustomer(data: AddCustomerRequest, token: string): Prom
 }
 
 export async function deleteCustomer(org: string, token: string): Promise<GenericResponse> {
-  const response = await fetch(`${BASE_URL}/ESAPI/EWA/V3/admin/del_cus`, {
+  const response = await fetch(`${BASE_URL}/ESAPI/EWA/V2/admin/del_cus`, {
     method: 'POST',
     headers: {
       'Authorization': `Basic ${token}`,
@@ -284,11 +284,37 @@ export async function deleteCustomer(org: string, token: string): Promise<Generi
 }
 
 export interface UpdateCustomerRequest {
-  name?: string;
-  phone?: string;
-  address?: string;
-  cinu?: number;
-  citd?: string;
+  CINA?: string;
+  CINE?: string;
+  CIN3?: string;
+  CIDE?: string;
+  CIPH1?: string;
+  CIPH2?: string;
+  CIPH3?: string;
+  CICO?: string;
+  CIADD?: string;
+  CIURL?: string;
+  CIEM?: string;
+  CIMAN?: string;
+  CILAN?: string;
+  CIID?: string;
+  JTID?: number;
+  CITYP?: number;
+  CIST?: number;
+  CINU?: number;
+  CIFD?: string;
+  CITD?: string;
+  CIDLM?: number;
+  CIAF1?: string;
+  CIAF2?: string;
+  CIAF3?: string;
+  CIAF4?: string;
+  CIAF5?: string;
+  CIAF6?: string;
+  CIAF7?: string;
+  CIAF8?: string;
+  CIAF9?: string;
+  CIAF10?: string;
   [key: string]: any;
 }
 
@@ -390,14 +416,6 @@ export async function updateUser(user: string, data: UpdateUserRequest, token: s
   return response.json();
 }
 
-export async function getAllUsers(): Promise<UsersResponse> {
-  const response = await fetch(`${BASE_URL}/ESAPI/EWA/V3/es/get_all_usr`);
-  if (!response.ok) {
-    throw new Error('Failed to fetch all users');
-  }
-  return response.json();
-}
-
 export interface UsersResponse {
   status: boolean;
   message: string;
@@ -461,6 +479,7 @@ export interface UsersResponse {
   };
 }
 
+<<<<<<< HEAD
 export interface LogsResponse {
   status: boolean;
   message: string;
@@ -476,11 +495,44 @@ export interface LogsResponse {
       SAFN: string;
       SAIMP: string;
       SAIP: string;
+=======
+export async function getAllUsers(): Promise<UsersResponse> {
+  const response = await fetch(`${BASE_URL}/ESAPI/EWA/V3/es/get_all_usr`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch all users');
+  }
+  return response.json();
+}
+
+export interface FullUsersResponse {
+  status: boolean;
+  message: string;
+  data: {
+    data: Array<{
+      session_id: string;
+      user_code: number;
+      customer_number: number;
+      customer_name: string;
+      SOMNA: string | null;
+      server_name: string;
+      status: string;
+      last_message_date: string;
+      daily_limit: number;
+      total_messages: number;
+      total_text: number;
+      total_attachments: number;
+      today_messages: number;
+      today_text: number;
+      today_attachments: number;
+      server_code: string;
+      user_name: string;
+>>>>>>> 9da9d54a7bae81222417c430103aebdf5f1ab22b
       [key: string]: any;
     }>;
   };
 }
 
+<<<<<<< HEAD
 export async function getLogs(): Promise<LogsResponse> {
   const response = await fetch(`${BASE_URL}/ESAPI/EWA/V3/es/get_all_log`);
   if (!response.ok) {
@@ -519,4 +571,103 @@ export async function createBackup(): Promise<GenericResponse> {
     data: {},
     code: 200
   };
+=======
+export async function getAllUsersFull(): Promise<FullUsersResponse> {
+  const response = await fetch(`${BASE_URL}/ESAPI/EWA/V3/es/get_all_usr_full`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch full users list');
+  }
+  const data = await response.json();
+  console.log('Get All Devices Full Response:', data);
+  return data;
+}
+
+export interface QrCodeResponse {
+  status: boolean;
+  message: string;
+  data: any;
+}
+
+export async function getQrCode(user: string): Promise<QrCodeResponse> {
+  console.log('Fetching QR Code for user:', user);
+  const response = await fetch(`${BASE_URL}/ESAPI/EWA/V3/auth/get_qr`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  const responseText = await response.text();
+  console.log('QR Code Raw Response:', responseText);
+
+  if (!response.ok) {
+    console.error('QR Code Error Response:', responseText);
+    throw new Error(`Failed to fetch QR code: ${response.status} ${response.statusText} - ${responseText}`);
+  }
+
+  try {
+    const data = JSON.parse(responseText);
+    console.log('QR Code Parsed Data:', data);
+    return data;
+  } catch (e) {
+    console.error('Failed to parse QR code JSON:', e);
+    throw new Error('Invalid JSON response from server');
+  }
+}
+
+export interface RestartSessionResponse {
+  status: boolean;
+  message: string;
+  data: any;
+}
+
+export async function restartSession(user: string): Promise<RestartSessionResponse> {
+  console.log('Restarting session for user:', user);
+  const response = await fetch(`${BASE_URL}/ESAPI/EWA/V2/auth/re_usr`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ user }),
+  });
+
+  const responseText = await response.text();
+  console.log('Restart Session Raw Response:', responseText);
+
+  if (!response.ok) {
+    throw new Error(`Failed to restart session: ${response.status} ${response.statusText}`);
+  }
+
+  try {
+    return JSON.parse(responseText);
+  } catch (e) {
+    console.error('Failed to parse restart session JSON:', e);
+    throw new Error('Invalid JSON response from server');
+  }
+}
+
+export async function stopSession(user: string): Promise<GenericResponse> {
+  console.log('Stopping session for user:', user);
+  const response = await fetch(`${BASE_URL}/ESAPI/EWA/V3/auth/stop_usr`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ user }),
+  });
+
+  const responseText = await response.text();
+  console.log('Stop Session Raw Response:', responseText);
+
+  if (!response.ok) {
+    throw new Error(`Failed to stop session: ${response.status} ${response.statusText}`);
+  }
+
+  try {
+    return JSON.parse(responseText);
+  } catch (e) {
+    console.error('Failed to parse stop session JSON:', e);
+    throw new Error('Invalid JSON response from server');
+  }
+>>>>>>> 9da9d54a7bae81222417c430103aebdf5f1ab22b
 }

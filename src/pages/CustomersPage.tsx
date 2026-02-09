@@ -50,6 +50,7 @@ export default function CustomersPage() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editData, setEditData] = useState({
     name: '',
+    nameE: '', // CINE
     detail: '',
     email: '',
     phone: '',
@@ -60,7 +61,9 @@ export default function CustomersPage() {
     system: '',
     address: '',
     cinu: 1,
-    citd: '',
+    status: 1, // CIST
+    cifd: '', // CIFD
+    citd: '', // CITD
     af2: '',
     af3: '',
     af4: '',
@@ -99,16 +102,19 @@ export default function CustomersPage() {
     setSelectedCustomer(customer);
     setEditData({
       name: customer.CINA || '',
+      nameE: customer.CINE || '',
       detail: customer.CIDE || '',
       email: customer.CIEM || '',
       phone: customer.CIPH1 || '',
       branch: customer.CIAF1 || '',
       dlm: customer.CIDLM || 0,
-      country: customer.CUCA || 'YE',
+      country: customer.CICO || 'YE',
       lan: customer.CILAN || 'ar',
       system: customer.CIAF10 || '',
       address: customer.CIADD || '',
       cinu: customer.CINU || 1,
+      status: customer.CIST || 1,
+      cifd: customer.CIFD ? customer.CIFD.split('T')[0] : '',
       citd: customer.CITD ? customer.CITD.split('T')[0] : '',
       af2: customer.CIAF2 || '',
       af3: customer.CIAF3 || '',
@@ -122,28 +128,49 @@ export default function CustomersPage() {
     if (!token || !selectedCustomer) return;
     setIsSubmitting(true);
     try {
-      // Map the user-friendly state back to API keys
-      const updateData = {
-        name: editData.name,
-        detail: editData.detail,
-        email: editData.email,
-        phone: editData.phone,
-        address: editData.address,
-        country: editData.country,
-        lan: editData.lan,
-        cinu: editData.cinu,
-        citd: editData.citd,
-        // Added AF fields mapping
-        af1: editData.branch,
-        af10: editData.system,
-        dlm: editData.dlm,
-        af2: editData.af2,
-        af3: editData.af3,
-        af4: editData.af4,
-        af5: editData.af5,
+      const updateData: any = {};
+
+      // Helper function to add to updateData if value changed
+      const addIfChanged = (apiKey: string, newValue: any, originalValue: any, isDate = false) => {
+        let normalizedOriginal = originalValue === null || originalValue === undefined ? '' : originalValue;
+        let normalizedNew = newValue === null || newValue === undefined ? '' : newValue;
+
+        if (isDate && normalizedOriginal) {
+          normalizedOriginal = normalizedOriginal.split('T')[0];
+        }
+
+        if (normalizedNew !== normalizedOriginal) {
+          updateData[apiKey] = newValue;
+        }
       };
 
-      await updateCFustomer(selectedCustomer.CIORG, updateData, token);
+      addIfChanged('CINA', editData.name, selectedCustomer.CINA);
+      addIfChanged('CINE', editData.nameE, selectedCustomer.CINE);
+      addIfChanged('CIDE', editData.detail, selectedCustomer.CIDE);
+      addIfChanged('CIPH1', editData.phone, selectedCustomer.CIPH1);
+      addIfChanged('CIEM', editData.email, selectedCustomer.CIEM);
+      addIfChanged('CIADD', editData.address, selectedCustomer.CIADD);
+      addIfChanged('CICO', editData.country, selectedCustomer.CICO);
+      addIfChanged('CILAN', editData.lan, selectedCustomer.CILAN);
+      addIfChanged('CINU', editData.cinu, selectedCustomer.CINU);
+      addIfChanged('CIST', editData.status, selectedCustomer.CIST);
+      addIfChanged('CIFD', editData.cifd, selectedCustomer.CIFD, true);
+      addIfChanged('CITD', editData.citd, selectedCustomer.CITD, true);
+      addIfChanged('CIDLM', editData.dlm, selectedCustomer.CIDLM);
+      addIfChanged('CIAF1', editData.branch, selectedCustomer.CIAF1);
+      addIfChanged('CIAF10', editData.system, selectedCustomer.CIAF10);
+      addIfChanged('CIAF2', editData.af2, selectedCustomer.CIAF2);
+      addIfChanged('CIAF3', editData.af3, selectedCustomer.CIAF3);
+      addIfChanged('CIAF4', editData.af4, selectedCustomer.CIAF4);
+      addIfChanged('CIAF5', editData.af5, selectedCustomer.CIAF5);
+
+      if (Object.keys(updateData).length === 0) {
+        toast({ title: 'تنبيه', description: 'لم يتم تغيير أي بيانات' });
+        setShowEditModal(false);
+        return;
+      }
+
+      await updateCustomer(selectedCustomer.CIORG, updateData, token);
 
       toast({
         title: 'تم التحديث بنجاح',
@@ -249,25 +276,56 @@ export default function CustomersPage() {
   const handleExport = () => {
     if (filteredCustomers.length === 0) return;
 
-    const headers = ["معرف العميل", "الرقم العام", "الفرع", "اسم العميل", "الهاتف", "تاريخ الإضافة", "الحالة", "الأجهزة", "حد الرسائل"];
+    const headers = [
+      "معرف العميل (SEQ)",
+      "الرقم العام (ID)",
+      "كود المنظمة (ORG)",
+      "الفرع (AF1)",
+      "اسم العميل",
+      "الاسم بالإنجليزي",
+      "الهاتف",
+      "الايميل",
+      "العنوان",
+      "المدير",
+      "اللغة",
+      "تاريخ الإضافة",
+      "تاريخ البداية",
+      "تاريخ النهاية",
+      "الحالة",
+      "عدد الأجهزة",
+      "حد الرسائل اليومي"
+    ];
+
     const rows = filteredCustomers.map(c => [
       c.CISEQ,
       c.CIID || '',
+      c.CIORG,
       c.CIAF1 || 'الرئيسي',
       c.CINA || '',
+      c.CINE || '',
       c.CIPH1 || '',
+      c.CIEM || '',
+      c.CIADD || '',
+      c.CIMAN || '',
+      c.CILAN === 'ar' ? 'العربية' : 'الإنجليزية',
       c.DATEI ? new Date(c.DATEI).toLocaleDateString('ar-YE') : '',
+      c.CIFD ? new Date(c.CIFD).toLocaleDateString('ar-YE') : '',
+      c.CITD ? new Date(c.CITD).toLocaleDateString('ar-YE') : '',
       c.CIST === 1 ? 'فعال' : 'موقوف',
       c.CINU,
       c.CIDLM
     ]);
 
-    const csvContent = "\uFEFF" + [headers, ...rows].map(e => e.join(",")).join("\n");
+    // Create CSV content with UTF-8 BOM for Excel compatibility
+    const csvContent = "\uFEFF" + [headers, ...rows]
+      .map(e => e.map(val => `"${String(val).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
-    link.setAttribute("download", `customers_export_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute("download", `تقرير_العملاء_${new Date().toISOString().split('T')[0]}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
@@ -275,7 +333,7 @@ export default function CustomersPage() {
 
     toast({
       title: "تم التصدير بنجاح",
-      description: "تم تصدير البيانات إلى ملف CSV"
+      description: "تم استخراج ملف إكسل (CSV) لبيانات العملاء بنجاح"
     });
   };
 
@@ -321,12 +379,18 @@ export default function CustomersPage() {
           <h1 className="text-xl lg:text-2xl font-bold text-foreground">العملاء</h1>
           <p className="text-sm text-muted-foreground mt-1">إدارة المنظمات والاشتراكات</p>
         </div>
-        <Link to="/dashboard/customers/add">
-          <Button className="gap-2 w-full sm:w-auto">
-            <Plus className="w-4 h-4" />
-            إضافة عميل
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+          <Button variant="outline" className="gap-2" onClick={handleExport}>
+            <FileDown className="w-4 h-4" />
+            تصدير
           </Button>
-        </Link>
+          <Link to="/dashboard/customers/add" className="w-full sm:w-auto">
+            <Button className="gap-2 w-full">
+              <Plus className="w-4 h-4" />
+              إضافة عميل
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Search & Advanced Filters */}
@@ -402,9 +466,9 @@ export default function CustomersPage() {
               <div className="flex items-center justify-between">
                 <Label>تاريخ الإضافة</Label>
                 <div className="flex items-center gap-1">
-                  <Button variant="ghost" size="xs" onClick={() => { applyQuickDate('today'); setCurrentPage(1); }} className="text-[10px] h-6">اليوم</Button>
-                  <Button variant="ghost" size="xs" onClick={() => { applyQuickDate('week'); setCurrentPage(1); }} className="text-[10px] h-6">أسبوع</Button>
-                  <Button variant="ghost" size="xs" onClick={() => { applyQuickDate('month'); setCurrentPage(1); }} className="text-[10px] h-6">شهر</Button>
+                  <Button variant="ghost" size="sm" onClick={() => { applyQuickDate('today'); setCurrentPage(1); }} className="text-[10px] h-6">اليوم</Button>
+                  <Button variant="ghost" size="sm" onClick={() => { applyQuickDate('week'); setCurrentPage(1); }} className="text-[10px] h-6">أسبوع</Button>
+                  <Button variant="ghost" size="sm" onClick={() => { applyQuickDate('month'); setCurrentPage(1); }} className="text-[10px] h-6">شهر</Button>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -576,7 +640,7 @@ export default function CustomersPage() {
                           className="gap-2"
                           asChild
                         >
-                          <Link to={`/dashboard/users?search=${customer.CIORG}`}>
+                          <Link to={`/dashboard/users?org=${customer.CIORG}`}>
                             <Smartphone className="w-4 h-4" />
                             عرض الجلسات
                           </Link>
@@ -634,6 +698,27 @@ export default function CustomersPage() {
                     onChange={(e) => setEditData({ ...editData, name: e.target.value })}
                     required
                   />
+                </div>
+                <div className="space-y-2 text-right">
+                  <Label htmlFor="edit-nameE">الاسم بالإنجليزي (CINE)</Label>
+                  <Input
+                    id="edit-nameE"
+                    value={editData.nameE}
+                    onChange={(e) => setEditData({ ...editData, nameE: e.target.value })}
+                    dir="ltr"
+                  />
+                </div>
+                <div className="space-y-2 text-right">
+                  <Label htmlFor="edit-status">الحالة (CIST)</Label>
+                  <select
+                    id="edit-status"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={editData.status}
+                    onChange={(e) => setEditData({ ...editData, status: parseInt(e.target.value) })}
+                  >
+                    <option value={1}>فعال</option>
+                    <option value={2}>موقوف</option>
+                  </select>
                 </div>
                 <div className="space-y-2 text-right">
                   <Label htmlFor="edit-detail">التفاصيل / الملاحظات</Label>
@@ -740,14 +825,25 @@ export default function CustomersPage() {
                   onChange={(e) => setEditData({ ...editData, system: e.target.value })}
                 />
               </div>
-              <div className="space-y-2 text-right">
-                <Label htmlFor="edit-citd">تاريخ انتهاء الاشتراك</Label>
-                <Input
-                  id="edit-citd"
-                  type="date"
-                  value={editData.citd}
-                  onChange={(e) => setEditData({ ...editData, citd: e.target.value })}
-                />
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-2 text-right">
+                  <Label htmlFor="edit-cifd">تاريخ البداية (CIFD)</Label>
+                  <Input
+                    id="edit-cifd"
+                    type="date"
+                    value={editData.cifd}
+                    onChange={(e) => setEditData({ ...editData, cifd: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2 text-right">
+                  <Label htmlFor="edit-citd">تاريخ النهاية (CITD)</Label>
+                  <Input
+                    id="edit-citd"
+                    type="date"
+                    value={editData.citd}
+                    onChange={(e) => setEditData({ ...editData, citd: e.target.value })}
+                  />
+                </div>
               </div>
             </div>
 
