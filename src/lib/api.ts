@@ -22,12 +22,14 @@ export interface DashboardData {
     }>;
     servers: Array<{
       serverCode: string;
-      type: string;
-      ip: string;
-      port: number;
-      status: string;
-      maxSessions: number;
-      connectedSessions: number;
+      totalConnectedSessions: number;
+      subServers: Array<{
+        type: string;
+        ip: string;
+        port: number;
+        status: string;
+        maxSessions: number;
+      }>;
     }>;
     lastSessions: Array<{
       name: string;
@@ -548,4 +550,69 @@ export async function stopSession(user: string): Promise<GenericResponse> {
     console.error('Failed to parse stop session JSON:', e);
     throw new Error('Invalid JSON response from server');
   }
+}
+
+// --- Logs Management ---
+
+export interface LogEntry {
+  SASEQ: number;       // Primary Key / Sequence
+  SATY: string;        // Alert Type (I-INFO, E-ERROR, W-WARNING, C-CRITICAL...)
+  SATOP: string;       // TOPIC (auth,chat,contact,account,admin,group,es,backup,maintenace,control,other)
+  SAMSG: string;       // MESSAGE
+  CIORG: string | null; // Organization
+  USER: string | null;  // User
+  SARO: string | null;  // ROUTE
+  SAFN: string | null;  // function_name
+  SAPR: number;        // Priority (1 high)
+  SAPA: {
+    client_ip?: string;
+    server_ip?: string;
+    request_body?: any;
+    [key: string]: any;
+  } | null;            // payload JSONB
+  SAME: any;           // Metadata JSONB
+  SATA: string | null; // target
+  SACT: string;        // channel_type (WHATSAPP, TELEGRAM, EMAIL)
+  SATC: number;        // try_count
+  SAMT: number;        // max_try
+  SALT: string | null; // last_try_at
+  SARC: string | null; // response_code
+  SARM: string | null; // response_message
+  SAER: string | null; // error
+  SAST: number;        // STATUS (1-SENT, 2-NEW, 3-FAILED, 4-CANCELLED, 5 ACTIVE)
+  DATEI: string;       // Created Date
+  DEVI: string | null;
+  SUID: string | null;
+  SUCH: string | null;
+  DATEU: string | null;
+  DEVU: string | null;
+  GUID: string | null;
+  RES: any;
+  [key: string]: any;
+}
+
+export interface LogsResponse {
+  status: string;
+  data: LogEntry[];
+}
+
+export async function getLogs(page = 1, limit = 20, filters?: any): Promise<LogsResponse> {
+  const response = await fetch(`${BASE_URL}/ESAPI/DASHBOARD/get_sys_alerts`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch system logs');
+  }
+  return response.json();
+}
+
+export async function backupDatabase(): Promise<{ status: boolean; message: string; fileName?: string }> {
+  // Simulate API call
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      resolve({
+        status: true,
+        message: 'Database backup completed successfully',
+        fileName: `backup_${new Date().toISOString().replace(/[:T]/g, '-').split('.')[0]}.sql`
+      });
+    }, 3000);
+  });
 }

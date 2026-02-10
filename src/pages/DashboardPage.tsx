@@ -85,7 +85,8 @@ export default function DashboardPage() {
 
   const { stats, proxyStatus, lastClients, lastSessions, servers } = dashboardData;
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return 'بدون تاريخ';
     try {
       return formatDistanceToNow(parseISO(dateString), { addSuffix: true, locale: ar });
     } catch (e) {
@@ -200,9 +201,6 @@ export default function DashboardPage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <h2 className="text-lg font-semibold text-foreground">حالة الخوادم</h2>
-            <div className="px-2 py-0.5 rounded text-[10px] bg-primary/10 text-primary font-medium">
-              بث مباشر
-            </div>
           </div>
           <button
             onClick={() => toggleSection('servers')}
@@ -220,46 +218,89 @@ export default function DashboardPage() {
                 <p className="text-sm text-muted-foreground">لا توجد بيانات للخوادم حالياً</p>
               </div>
             ) : (
-              servers.map((server, index) => (
-                <motion.div
-                  key={server.serverCode}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.05 * index }}
-                  className="stats-card p-4 hover:shadow-lg transition-all"
-                >
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                        <Server className="w-4 h-4 text-primary" />
-                      </div>
-                      <div>
-                        <span className="font-bold text-sm block leading-none">{server.serverCode}</span>
-                        <span className="text-[10px] text-muted-foreground uppercase">{server.type}</span>
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-end gap-1">
-                      <StatusBadge status={server.status === 'Active' ? 'active' : 'inactive'} />
-                      <span className="text-[9px] text-muted-foreground">{server.ip}</span>
-                    </div>
-                  </div>
+              servers.map((server, index) => {
+                const totalMaxSessions = server.subServers?.reduce((acc, sub) => acc + (sub.maxSessions || 0), 0) || 0;
+                const types = Array.from(new Set(server.subServers?.map(sub => sub.type) || [])).join(' + ');
+                const mainIp = server.subServers?.[0]?.ip || 'N/A';
 
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="text-muted-foreground">الجلسات المتصلة</span>
-                      <span className="font-medium text-foreground">
-                        {server.connectedSessions.toLocaleString('ar-SA')} / {server.maxSessions.toLocaleString('ar-SA')}
-                      </span>
+                return (
+                  <motion.div
+                    key={server.serverCode}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.05 * index }}
+                    className="stats-card p-6 hover:shadow-xl transition-all border-primary/5 bg-gradient-to-br from-background to-muted/30"
+                  >
+                    <div className="flex items-center justify-between mb-6">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 shadow-inner text-primary">
+                          <Server className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <h3 className="font-black text-xl tracking-tight text-foreground">{server.serverCode}</h3>
+                          <div className="flex items-center gap-2">
+                             <span className="text-[10px] text-muted-foreground font-mono">{mainIp}</span>
+                             <div className="w-1 h-1 rounded-full bg-border" />
+                          </div>
+                        </div>
+                      </div>
+                      <StatusBadge status={server.subServers?.some(s => s.status === 'Active') ? 'active' : 'inactive'} />
                     </div>
-                    <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-primary transition-all duration-700"
-                        style={{ width: `${Math.max(5, Math.min((server.connectedSessions / server.maxSessions) * 100, 100))}%` }}
-                      />
+
+                    <div className="space-y-6">
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between text-xs font-bold">
+                          <span className="text-muted-foreground uppercase tracking-widest">Total Sessions</span>
+                          <div className="flex items-baseline gap-1">
+                             <span className="text-lg font-black">{server.totalConnectedSessions || 0}</span>
+                             <span className="text-muted-foreground/40">/</span>
+                             <span className="text-muted-foreground">{totalMaxSessions}</span>
+                          </div>
+                        </div>
+                        <div className="w-full h-2 bg-muted rounded-full overflow-hidden p-[1px] border border-border/50">
+                          <div
+                            className="h-full bg-primary rounded-full transition-all duration-1000 shadow-[0_0_10px_rgba(var(--primary),0.3)]"
+                            style={{ width: `${Math.max(2, Math.min(((server.totalConnectedSessions || 0) / (totalMaxSessions || 1)) * 100, 100))}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Sub-Servers Unified List */}
+                      {server.subServers && server.subServers.length > 0 && (
+                        <div className="pt-5 border-t border-border/40 space-y-3">
+                          <div className="flex items-center justify-between">
+                             <div className="flex items-center gap-2 text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                               <Activity className="w-3 h-3 text-primary/60" />
+                               Sub-Units ({server.subServers.length})
+                             </div>
+                             <div className="h-px flex-1 bg-border/30 mx-4" />
+                          </div>
+                          
+                          <div className="grid grid-cols-1 gap-2">
+                            {server.subServers.map((sub, sIdx) => (
+                              <div key={sIdx} className="flex items-center justify-between p-2.5 rounded-xl bg-background/40 hover:bg-background/80 transition-colors border border-border/40 group/sub">
+                                <div className="flex items-center gap-2.5">
+                                  <div className={`w-2 h-2 rounded-full ${sub.status === 'Active' ? 'bg-success shadow-[0_0_8px_rgba(34,197,94,0.4)]' : 'bg-destructive'}`} />
+                                  <div className="flex flex-col">
+                                     <span className="text-[11px] font-black text-foreground group-hover/sub:text-primary transition-colors">{sub.type}</span>
+                                     <span className="text-[9px] font-mono text-muted-foreground opacity-60">Port: {sub.port}</span>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                   <div className="flex flex-col items-end">
+                                      <span className="text-[9px] font-bold text-muted-foreground uppercase">Capacity</span>
+                                      <span className="text-xs font-black">{sub.maxSessions}</span>
+                                   </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                </motion.div>
-              ))
+                  </motion.div>
+                );
+              })
             )}
           </div>
         )}
@@ -300,7 +341,7 @@ export default function DashboardPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-foreground truncate">
-                    {customer.name}
+                    {customer.name || 'عميل بدون اسم'}
                   </p>
                   <p className="text-xs text-muted-foreground truncate">
                     {customer.email || 'لا يوجد بريد إلكتروني'}
@@ -347,7 +388,7 @@ export default function DashboardPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-foreground truncate">
-                    {session.name}
+                    {session.name || 'جلسة بدون اسم'}
                   </p>
                   <p className="text-xs text-muted-foreground truncate">
                     {session.clientName}
