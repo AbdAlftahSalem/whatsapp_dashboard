@@ -143,25 +143,25 @@ export async function getServers(): Promise<ServersResponse> {
 // --- Customer Management ---
 
 export interface AddCustomerRequest {
-  CINA: string;
-  CINE?: string;
-  CIN3?: string;
-  CIDE?: string;
-  CIPH1: string;
-  CIPH2?: string;
-  CIPH3?: string;
-  CIEM: string;
-  CIADD: string;
-  CIURL?: string;
-  CICO: string;
-  CIMAN?: string;
-  CILAN: string;
-  CIID?: string;
-  JTID?: number;
-  CITYP: number;
-  CINU: number;
-  CIFD: string;
-  CITD: string;
+  name: string;
+  name2?: string;
+  name3?: string;
+  detail?: string;
+  phone: string;
+  phone2?: string;
+  phone3?: string;
+  email: string;
+  address: string;
+  webSite?: string;
+  country: string;
+  manager?: string;
+  lan: string;
+  ciid?: string;
+  jtid?: number;
+  suTyp: number;
+  cinu: number;
+  cifd: string;
+  citd: string;
 }
 
 export interface AddCustomerResponse {
