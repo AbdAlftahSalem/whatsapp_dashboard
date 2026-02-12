@@ -211,6 +211,55 @@ export async function deleteServer(serverId: number, token?: string): Promise<De
   return response.json();
 }
 
+export interface UpdateServerRequest {
+  SISN?: string;        // رمز الخادم (Server Name/Code)
+  SITY?: string;        // نوع الخدمة (Server Type)
+  SIIP?: string;        // عنوان IP
+  SIPO?: number;        // المنفذ (Port)
+  SIPT?: string;        // البروتوكول (HTTP, HTTPS, etc.)
+  SIST?: number;        // حالة الخدمة
+  DEFN?: number;        // السيرفر الافتراضي
+  SIRM?: string;        // SERVICE_RUN_MODE
+  SIRRW?: number;       // هل يتم Rewrite
+  SIRT?: string;        // نوع التوجيه
+  SIRP?: string;        // مسار التوجيه
+  SIMS?: number;        // الحد الأقصى للجلسات
+  SIAUY?: number;       // هل الخدمة تحتاج AUTH
+  SIAUT?: string;       // نوع المصادقة
+  SIAUC?: any;          // إعدادات المصادقة (JSON)
+  SIWE?: number;        // وزن السيرفر
+  SITMS?: number;       // مهلة الاتصال (ms)
+  SIMC?: number;        // الحد الأقصى للاتصالات المتزامنة
+  SIDE?: string;        // تفاصيل
+  SIAF1?: string;       // حقل إضافي 1
+  SIAF2?: string;       // حقل إضافي 2
+  [key: string]: any;
+}
+
+export interface UpdateServerResponse {
+  status: boolean;
+  message: string;
+  data?: {
+    SISEQ: number;
+    [key: string]: any;
+  };
+}
+
+export async function updateServer(serverId: number, serverData: UpdateServerRequest, token?: string): Promise<UpdateServerResponse> {
+  const response = await fetch(`${BASE_URL}/ESAPI/SERVER/update/${serverId}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token && { 'Authorization': `Bearer ${token}` })
+    },
+    body: JSON.stringify(serverData)
+  });
+  if (!response.ok) {
+    throw new Error("Failed to update server");
+  }
+  return response.json();
+}
+
 // --- Customer Management ---
 
 export interface AddCustomerRequest {

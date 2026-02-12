@@ -64,7 +64,7 @@ import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
-import { getServers, addServer, deleteServer } from '@/lib/api';
+import { getServers, addServer, deleteServer, updateServer } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
 
 interface ServerData {
@@ -128,6 +128,8 @@ export default function ServersPage() {
   const [deletingServerId, setDeletingServerId] = useState<number | null>(null);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [serverToDelete, setServerToDelete] = useState<ServerData | null>(null);
+  const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
+  const [originalServerData, setOriginalServerData] = useState<ServerData | null>(null);
 
   const { toast } = useToast();
   const { accessToken: token } = useAuthStore();
@@ -404,10 +406,93 @@ export default function ServersPage() {
     }
   };
 
-  const handleEditServer = () => {
-    // In a real app, this would be an API call
-    toast({ title: 'ميزة تعديل خادم ستتوفر قريباً عبر الـ API' });
-    setIsEditModalOpen(false);
+  const handleEditServer = async () => {
+    if (!selectedServer || !originalServerData || !token) {
+      toast({ 
+        title: 'خطأ', 
+        description: 'معلومات الخادم أو الجلسة غير متوفرة',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    setIsSubmittingEdit(true);
+
+    try {
+      // Calculate only changed fields - only send fields that differ from the original
+      const changedData: Record<string, any> = {};
+
+      // Map between UI field names and DB field names
+      const fieldMappings: Record<string, string> = {
+        name: 'SISN',
+        code: 'SITY',
+        type: 'SITY',
+        ip: 'SIIP',
+        port: 'SIPO',
+        protocol: 'SIPT',
+        status: 'SIST',
+        runMode: 'SIRM',
+        maxSessions: 'SIMS',
+        location: 'SIAF2',
+        diskSpace: 'SIDE',
+      };
+
+      // Check each field for changes
+      for (const [uiField, dbField] of Object.entries(fieldMappings)) {
+        if (selectedServer[uiField as keyof ServerData] !== originalServerData[uiField as keyof ServerData]) {
+          let value = selectedServer[uiField as keyof ServerData];
+          
+          // Convert to appropriate types
+          if (dbField === 'SIPO' || dbField === 'SIMS') {
+            value = typeof value === 'string' ? parseInt(value) : value;
+          }
+          
+          changedData[dbField] = value;
+        }
+      }
+
+      // If no changes, just close the modal
+      if (Object.keys(changedData).length === 0) {
+        toast({ 
+          title: 'لا توجد تغييرات', 
+          description: 'لم تقم بأي تعديل على بيانات الخادم',
+          variant: 'default'
+        });
+        setIsEditModalOpen(false);
+        return;
+      }
+
+      const response = await updateServer(selectedServer.id as number, changedData, token);
+
+      if (response.status) {
+        toast({ 
+          title: 'تم التحديث بنجاح', 
+          description: `تم تحديث بيانات الخادم ${selectedServer.name} بنجاح`,
+          variant: 'default'
+        });
+        
+        setIsEditModalOpen(false);
+        setSelectedServer(null);
+        setOriginalServerData(null);
+        
+        // Refresh servers list
+        refetch();
+      } else {
+        toast({ 
+          title: 'خطأ', 
+          description: response.message || 'فشل في تحديث الخادم',
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      toast({ 
+        title: 'خطأ', 
+        description: error instanceof Error ? error.message : 'حدث خطأ أثناء تحديث الخادم',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsSubmittingEdit(false);
+    }
   };
 
   const handleDeleteServer = (id: number) => {
@@ -832,7 +917,7 @@ export default function ServersPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="start" className="w-48">
-                          <DropdownMenuItem className="gap-2" onClick={() => { setSelectedServer(server); setIsEditModalOpen(true); }}>
+                          <DropdownMenuItem className="gap-2" onClick={() => { setSelectedServer(server); setOriginalServerData(server); setIsEditModalOpen(true); }}>
                             <Edit2 className="w-4 h-4" />
                             تعديل
                           </DropdownMenuItem>
@@ -905,7 +990,7 @@ export default function ServersPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-48">
-                            <DropdownMenuItem className="gap-2 py-2" onClick={() => { setSelectedServer(server); setIsEditModalOpen(true); }}>
+                            <DropdownMenuItem className="gap-2 py-2" onClick={() => { setSelectedServer(server); setOriginalServerData(server); setIsEditModalOpen(true); }}>
                               <Edit className="w-4 h-4" />
                               <span>تعديل الإعدادات</span>
                             </DropdownMenuItem>
@@ -1370,6 +1455,7 @@ export default function ServersPage() {
                 <Input
                   value={selectedServer.name}
                   onChange={(e) => setSelectedServer({ ...selectedServer, name: e.target.value })}
+                  disabled={isSubmittingEdit}
                 />
               </div>
               <div className="space-y-2">
@@ -1378,6 +1464,7 @@ export default function ServersPage() {
                   value={selectedServer.ip}
                   onChange={(e) => setSelectedServer({ ...selectedServer, ip: e.target.value })}
                   dir="ltr"
+                  disabled={isSubmittingEdit}
                 />
               </div>
               <div className="space-y-2">
@@ -1386,11 +1473,12 @@ export default function ServersPage() {
                   value={String(selectedServer.port)}
                   onChange={(e) => setSelectedServer({ ...selectedServer, port: Number(e.target.value) })}
                   dir="ltr"
+                  disabled={isSubmittingEdit}
                 />
               </div>
               <div className="space-y-2">
                 <Label className="text-xs font-bold text-muted-foreground uppercase">نوع السيرفر (Run Mode)</Label>
-                <Select value={selectedServer.runMode} onValueChange={(v) => setSelectedServer({ ...selectedServer, runMode: v })}>
+                <Select value={selectedServer.runMode} onValueChange={(v) => setSelectedServer({ ...selectedServer, runMode: v })} disabled={isSubmittingEdit}>
                   <SelectTrigger className="bg-background">
                     <SelectValue />
                   </SelectTrigger>
@@ -1408,13 +1496,34 @@ export default function ServersPage() {
                   type="number"
                   value={selectedServer.maxSessions}
                   onChange={(e) => setSelectedServer({ ...selectedServer, maxSessions: Number(e.target.value) })}
+                  disabled={isSubmittingEdit}
                 />
               </div>
             </div>
           )}
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setIsEditModalOpen(false)} className="px-6">إلغاء</Button>
-            <Button onClick={handleEditServer} className="px-8 shadow-lg shadow-primary/20">تحديث البيانات</Button>
+            <Button 
+              variant="outline" 
+              onClick={() => setIsEditModalOpen(false)} 
+              className="px-6"
+              disabled={isSubmittingEdit}
+            >
+              إلغاء
+            </Button>
+            <Button 
+              onClick={handleEditServer} 
+              className="px-8 shadow-lg shadow-primary/20"
+              disabled={isSubmittingEdit}
+            >
+              {isSubmittingEdit ? (
+                <>
+                  <Loader2 className="w-4 h-4 ml-2 animate-spin" />
+                  جاري التحديث...
+                </>
+              ) : (
+                'تحديث البيانات'
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
