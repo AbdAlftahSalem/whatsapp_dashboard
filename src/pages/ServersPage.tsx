@@ -25,7 +25,10 @@ import {
   ChevronLeft,
   ChevronRight,
   AlertTriangle,
+  List,
+  Table as TableIcon,
 } from 'lucide-react';
+import { Area, AreaChart, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -64,24 +67,29 @@ interface ServerData {
   ip: string;
   port: number;
   status: 'online' | 'offline' | 'restarting' | 'shutdown';
-  serverType: string;
+  runMode: string;
   maxSessions: number;
   activeSessions: number;
-  os?: string | null;
-  uptime?: string | null;
-  cpuUsage?: number | null;
-  ramUsage?: number | null;
-  ramTotal?: number | null;
-  diskSpace?: string | null;
+  os: string | null;
+  uptime: string | null;
+  cpuUsage: number | null;
+  ramUsage: number | null;
+  ramTotal: number | null;
+  diskSpace: string | null;
   lastCheck: string;
   location: string;
+  protocol: string;
+  history?: { cpu: number; ram: number }[];
 }
 
 export default function ServersPage() {
   const [searchQuery, setSearchQuery] = useState('');
+  const [viewMode, setViewMode] = useState<'cards' | 'tiles' | 'table'>('cards');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedServer, setSelectedServer] = useState<ServerData | null>(null);
+  const [serverHistory, setServerHistory] = useState<Record<number, { cpu: number; ram: number }[]>>({});
+  
   const [newServer, setNewServer] = useState({ 
     name: '', 
     ip: '', 
@@ -99,8 +107,29 @@ export default function ServersPage() {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['servers'],
     queryFn: getServers,
-    refetchInterval: 30000, // Refresh every 30s
+    refetchInterval: 15000, // Refresh every 15s for better chart feel (SRV-002)
   });
+
+  // Track history for charts (SRV-002)
+  useEffect(() => {
+    if (data?.data?.servers) {
+      setServerHistory(prev => {
+        const next = { ...prev };
+        data.data.servers.forEach((s: any) => {
+          const svc = Array.isArray(s.services) && s.services.length ? s.services[0] : s;
+          const id = svc?.SISEQ ?? s?.SISEQ;
+          const health = svc?.health ?? s?.health;
+          if (id && health) {
+            const cpu = health.cpuPercent ?? 0;
+            const ram = health.memory?.usedGB ? (health.memory.usedGB / (health.memory.totalGB || 1)) * 100 : 0;
+            const currentHistory = next[id] || [];
+            next[id] = [...currentHistory, { cpu, ram }].slice(-10); // Keep last 10 points
+          }
+        });
+        return next;
+      });
+    }
+  }, [data]);
 
   // Real-time jitter effect for CPU/RAM (SRV-002)
   useEffect(() => {
@@ -120,6 +149,7 @@ export default function ServersPage() {
     .map((s: any, index: number) => {
       // Prefer service-level entry when provided
       const svc = Array.isArray(s.services) && s.services.length ? s.services[0] : s;
+      const id = svc?.SISEQ ?? s?.SISEQ ?? index;
       const health = svc?.health ?? s?.health ?? null;
 
       // Determine status: if health is explicitly null -> shutdown, otherwise check SIST
@@ -131,17 +161,17 @@ export default function ServersPage() {
       const ramTotal: number | null = typeof health?.memory?.totalGB === 'number' ? health.memory.totalGB : null;
       const readySessions: number = typeof health?.readySessions === 'number' ? health.readySessions : (typeof s?.readyCount === 'number' ? s.readyCount : (typeof s?.sessionCount === 'number' ? s.sessionCount : (svc?.SIMS ?? 0)));
 
-      const uptimeStr = typeof health?.uptime === 'number' ? `${health.uptime} s` : null;
+      const uptimeStr = typeof health?.uptime === 'number' ? `${health.uptime} s` : (health?.uptime ? String(health.uptime) : null);
 
       return {
         id: svc?.SISEQ ?? s?.SISEQ ?? index,
         name: s?.SISN ?? svc?.SISN ?? `Server-${index}`,
-        code: svc?.SIRM ?? s?.SIRM ?? `SVR-${svc?.SISEQ ?? index}`,
+        code: s?.SISN ?? svc?.SISN ?? `SVR-${svc?.SISEQ ?? index}`,
         type: svc?.SITY ?? s?.SITY ?? 'NORMAL',
         ip: svc?.SIIP ?? s?.SIIP ?? '0.0.0.0',
         port: svc?.SIPO ?? s?.SIPO ?? 5021,
         status,
-        serverType: svc?.SITY ?? s?.SITY ?? 'NORMAL',
+        runMode: svc?.SIRM ?? s?.SIRM ?? 'N',
         maxSessions: svc?.SIMS ?? s?.SIMS ?? 100,
         activeSessions: readySessions,
         os: svc?.SIAF1 ?? s?.SIAF1 ?? null,
@@ -150,8 +180,10 @@ export default function ServersPage() {
         ramUsage: ramUsed,
         ramTotal: ramTotal,
         diskSpace: svc?.SIDE ?? s?.SIDE ?? null,
-        lastCheck: svc?.SILC ? new Date(svc.SILC).toLocaleTimeString('ar-YE') : (s?.SILC ? new Date(s.SILC).toLocaleTimeString('ar-YE') : ''),
+        lastCheck: svc?.SILC ? new Date(svc.SILC).toLocaleString('ar-YE') : (s?.SILC ? new Date(s.SILC).toLocaleString('ar-YE') : ''),
         location: svc?.SIAF2 ?? s?.SIAF2 ?? '',
+        protocol: svc?.SIPT ?? s?.SIPT ?? 'HTTP',
+        history: serverHistory[id] || [],
       };
     });
 
@@ -166,6 +198,31 @@ export default function ServersPage() {
   const paginatedServers = filteredServers.slice(
     (currentPage - 1) * pageSize,
     currentPage * pageSize
+  );
+
+  // Sparkline Component for real-time vibe (SRV-002)
+  const SparklineChart = ({ data, color, dataKey }: { data: { cpu: number; ram: number }[], color: string, dataKey: 'cpu' | 'ram' }) => (
+    <div className="h-8 w-16 opacity-50">
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={data.length > 0 ? data : [{ cpu: 0, ram: 0 }]}>
+          <defs>
+            <linearGradient id={`gradient-${dataKey}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor={color} stopOpacity={0.3}/>
+              <stop offset="95%" stopColor={color} stopOpacity={0}/>
+            </linearGradient>
+          </defs>
+          <Area 
+            type="monotone" 
+            dataKey={dataKey} 
+            stroke={color} 
+            fillOpacity={1} 
+            fill={`url(#gradient-${dataKey})`} 
+            strokeWidth={1.5}
+            isAnimationActive={false}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
   );
 
   const handleAddServer = () => {
@@ -244,6 +301,12 @@ export default function ServersPage() {
     if (usage >= 81) return 'text-destructive';
     if (usage >= 61) return 'text-warning';
     return 'text-success';
+  };
+
+  const getResourceStrokeColor = (usage: number) => {
+    if (usage >= 81) return '#ef4444';
+    if (usage >= 61) return '#f59e0b';
+    return '#22c55e';
   };
 
   if (isLoading) {
@@ -374,189 +437,383 @@ export default function ServersPage() {
         </div>
         
         <div className="flex items-center gap-3 w-full md:w-auto px-4">
+          <div className="flex items-center bg-muted/50 p-1 rounded-xl border border-border/50">
+            <Button
+              variant={viewMode === 'cards' ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('cards')}
+              className="h-8 px-3 rounded-lg text-xs font-bold gap-2"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              بطاقات
+            </Button>
+            <Button
+              variant={viewMode === 'tiles' ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('tiles')}
+              className="h-8 px-3 rounded-lg text-xs font-bold gap-2"
+            >
+              <List className="w-3.5 h-3.5" />
+              مربعات
+            </Button>
+            <Button
+              variant={viewMode === 'table' ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('table')}
+              className="h-8 px-3 rounded-lg text-xs font-bold gap-2"
+            >
+              <TableIcon className="w-3.5 h-3.5" />
+              جدول
+            </Button>
+          </div>
+          <div className="w-px h-6 bg-border/50 mx-1" />
           <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground uppercase tracking-widest px-3 py-1.5 rounded-lg bg-muted/50 border border-border/50">
-            <LayoutGrid className="w-3.5 h-3.5" />
-            <span>نتائج البحث: {filteredServers.length}</span>
+            <span>النتائج: {filteredServers.length}</span>
           </div>
         </div>
       </div>
 
-      {/* Server Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        {paginatedServers.map((server, index) => (
-          <motion.div
-            key={server.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.05 }}
-            className="premium-card group"
-          >
-            {/* Glassy Header */}
-            <div className="p-5 border-b border-border/40 bg-muted/5">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <div className={`p-2.5 rounded-xl transition-all duration-300 ${
-                    server.status === 'online' 
-                    ? 'bg-success/10 text-success shadow-[0_0_15px_rgba(34,197,94,0.1)]' 
-                    : server.status === 'shutdown' ? 'bg-destructive/10 text-destructive shadow-[0_0_15px_rgba(239,68,68,0.06)]' : 'bg-muted text-muted-foreground'
-                  }`}>
-                    <Server className="w-5 h-5" />
+
+      {/* Server Grid / Table / Tiles */}
+      {viewMode === 'table' ? (
+        <div className="glass-panel overflow-hidden border border-border/40 rounded-2xl shadow-2xl shadow-black/5">
+          <div className="overflow-x-auto">
+            <table className="w-full text-right">
+              <thead>
+                <tr className="bg-muted/30 border-b border-border/40">
+                  <th className="px-6 py-4 text-[10px] font-black text-muted-foreground uppercase tracking-widest">الخادم</th>
+                  <th className="px-6 py-4 text-[10px] font-black text-muted-foreground uppercase tracking-widest">الحالة</th>
+                  <th className="px-6 py-4 text-[10px] font-black text-muted-foreground uppercase tracking-widest">عنوان IP</th>
+                  <th className="px-6 py-4 text-[10px] font-black text-muted-foreground uppercase tracking-widest">الجلسات</th>
+                  <th className="px-6 py-4 text-[10px] font-black text-muted-foreground uppercase tracking-widest">الموارد</th>
+                  <th className="px-6 py-4 text-[10px] font-black text-muted-foreground uppercase tracking-widest">نظام التشغيل</th>
+                  <th className="px-6 py-4 text-[10px] font-black text-muted-foreground uppercase tracking-widest text-left">إجراءات</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/20">
+                {paginatedServers.map((server) => (
+                  <tr key={server.id} className="hover:bg-muted/10 transition-colors group">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className={`p-2 rounded-lg ${server.status === 'online' ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'}`}>
+                          <Server className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-foreground">{server.name}</p>
+                          <p className="text-[10px] text-muted-foreground uppercase">{server.type}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-1.5 h-1.5 rounded-full ${server.status === 'online' ? 'bg-success animate-pulse' : 'bg-muted'}`} />
+                        <span className="text-xs font-bold text-muted-foreground">{getStatusLabel(server.status)}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <p className="text-xs font-mono text-muted-foreground" dir="ltr">{server.ip}:{server.port}</p>
+                    </td>
+                    <td className="px-6 py-4">
+                      <p className="text-xs font-bold">{server.activeSessions} / {server.maxSessions}</p>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-4">
+                        <div className="flex flex-col gap-1 w-20">
+                          <span className="text-[9px] text-muted-foreground uppercase font-black">CPU: {Math.round(server.cpuUsage || 0)}%</span>
+                          <Progress value={server.cpuUsage || 0} className="h-1" />
+                        </div>
+                        <div className="flex flex-col gap-1 w-20">
+                          <span className="text-[9px] text-muted-foreground uppercase font-black">RAM: {Math.round((server.ramUsage || 0) / (server.ramTotal || 1) * 100)}%</span>
+                          <Progress value={(server.ramUsage || 0) / (server.ramTotal || 1) * 100} className="h-1" />
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="text-xs text-muted-foreground/80">{server.os || 'N/A'}</span>
+                    </td>
+                    <td className="px-6 py-4 text-left">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreVertical className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start">
+                          <DropdownMenuItem onClick={() => { setSelectedServer(server); setIsEditModalOpen(true); }}>تعديل</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleRestartServer(server.id)}>إعادة تشغيل</DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteServer(server.id)}>حذف</DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : (
+        <div className={`grid gap-6 ${viewMode === 'tiles' ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6' : 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3'}`}>
+          {paginatedServers.map((server, index) => (
+            <motion.div
+              key={server.id}
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: index * 0.05 }}
+              className={`premium-card group relative ${viewMode === 'tiles' ? 'p-4' : ''}`}
+            >
+              {viewMode === 'tiles' ? (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className={`p-2 rounded-xl ${server.status === 'online' ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'}`}>
+                      <Server className="w-4 h-4" />
+                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <MoreVertical className="w-3 h-3" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => { setSelectedServer(server); setIsEditModalOpen(true); }}>تعديل</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleRestartServer(server.id)}>إعادة التشغيل</DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                   <div>
-                    <h3 className="font-bold text-foreground tracking-tight flex items-center gap-2">
-                      {server.name}
-                      <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-primary/10 text-primary uppercase font-bold tracking-tighter">
-                        {server.serverType}
-                      </span>
-                    </h3>
-                    <div className="flex items-center gap-1.5 mt-1">
-                      <div className={`w-1.5 h-1.5 rounded-full ${
-                        server.status === 'online' ? 'bg-success animate-pulse' : server.status === 'shutdown' ? 'bg-destructive' : 'bg-muted'
-                      }`} />
-                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-                        {getStatusLabel(server.status)}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground/40 mx-1">|</span>
-                      <span className="text-[10px] font-mono text-muted-foreground" dir="ltr">{server.ip}</span>
+                    <h4 className="text-xs font-black truncate">{server.name}</h4>
+                    <p className="text-[9px] font-mono text-muted-foreground truncate" dir="ltr">{server.ip}</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-[8px] font-bold text-muted-foreground">
+                        <span>CPU</span>
+                        <span className={getResourceTextColor(server.cpuUsage || 0)}>{Math.round(server.cpuUsage || 0)}%</span>
+                      </div>
+                      <Progress value={server.cpuUsage || 0} className="h-1" />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-[8px] font-bold text-muted-foreground">
+                        <span>RAM</span>
+                        <span className={getResourceTextColor((server.ramUsage || 0) / (server.ramTotal || 1) * 100)}>
+                          {Math.round((server.ramUsage || 0) / (server.ramTotal || 1) * 100)}%
+                        </span>
+                      </div>
+                      <Progress value={(server.ramUsage || 0) / (server.ramTotal || 1) * 100} className="h-1" />
                     </div>
                   </div>
-                </div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-muted/80">
-                      <MoreVertical className="w-4 h-4 text-muted-foreground" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48">
-                    <DropdownMenuItem className="gap-2 py-2" onClick={() => { setSelectedServer(server); setIsEditModalOpen(true); }}>
-                      <Edit className="w-4 h-4" />
-                      <span>تعديل الإعدادات</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem className="gap-2 py-2" onClick={() => handleRestartServer(server.id)}>
-                      <RefreshCw className="w-4 h-4" />
-                      <span>إعادة التشغيل</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem className="gap-2 py-2 text-destructive font-medium" onClick={() => handleDeleteServer(server.id)}>
-                      <Trash2 className="w-4 h-4" />
-                      <span>حذف الخادم</span>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            </div>
-
-            <div className="p-5 space-y-6">
-              {/* Resources - Compact Rows */}
-              {server.status === 'online' && server.cpuUsage != null && server.ramUsage != null && server.ramTotal != null ? (
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">
-                      <div className="flex items-center gap-1.5">
-                        <Cpu className="w-3 h-3" />
-                        معالج النظام (CPU)
-                      </div>
-                      <span className={getResourceTextColor(server.cpuUsage)}>{Math.round(server.cpuUsage)}%</span>
+                  <div className="flex items-center justify-between pt-2 border-t border-border/10">
+                    <div className="flex items-center gap-1">
+                      <div className={`w-1 h-1 rounded-full ${server.status === 'online' ? 'bg-success' : 'bg-muted'}`} />
+                      <span className="text-[9px] font-bold">{getStatusLabel(server.status)}</span>
                     </div>
-                    <div className="resource-progress">
-                      <motion.div 
-                        initial={{ width: 0 }}
-                        animate={{ width: `${server.cpuUsage}%` }}
-                        className={`resource-progress-inner ${getResourceColor(server.cpuUsage)}`}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">
-                      <div className="flex items-center gap-1.5">
-                        <HardDrive className="w-3 h-3" />
-                        ذاكرة النظام (RAM)
-                      </div>
-                      <span className={getResourceTextColor((server.ramUsage / server.ramTotal) * 100)}>
-                        {Math.round((server.ramUsage / server.ramTotal) * 100)}%
-                      </span>
-                    </div>
-                    <div className="resource-progress">
-                      <motion.div 
-                        initial={{ width: 0 }}
-                        animate={{ width: `${(server.ramUsage / server.ramTotal) * 100}%` }}
-                        className={`resource-progress-inner ${getResourceColor((server.ramUsage / server.ramTotal) * 100)}`}
-                      />
-                    </div>
-                    <div className="flex justify-between text-[9px] text-muted-foreground/60 font-mono mt-1">
-                      <span>{server.ramUsage.toFixed(1)} GB مستخدم</span>
-                      <span>{server.ramTotal} GB إجمالي</span>
-                    </div>
+                    <span className="text-[9px] text-muted-foreground font-bold">{server.activeSessions}/{server.maxSessions}</span>
                   </div>
                 </div>
               ) : (
-                <div className="p-4 text-center rounded-md bg-muted/10 border border-border/30">
-                  <p className="text-sm font-bold text-muted-foreground">بيانات الأداء غير متوفرة — الخادم غير متصل أو غير متاح</p>
-                </div>
-              )}
-
-              {/* Stats Grid - Cleaner icons & layout (only when online) */}
-              {server.status === 'online' && (
-                <div className="grid grid-cols-2 gap-4 pb-2">
-                  <div className="p-2.5 rounded-xl bg-muted/30 border border-border/20 group-hover:bg-muted/50 transition-colors">
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1.5 mb-1.5">
-                      <Database className="w-3 h-3 text-primary/70" />
-                      الجلسات
-                    </p>
-                    <p className="text-sm font-bold text-foreground">
-                      {server.activeSessions} <span className="text-[10px] text-muted-foreground font-normal">/ {server.maxSessions}</span>
-                    </p>
-                  </div>
-                  <div className="p-2.5 rounded-xl bg-muted/30 border border-border/20 group-hover:bg-muted/50 transition-colors">
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1.5 mb-1.5">
-                      <Activity className="w-3 h-3 text-primary/70" />
-                      المساحة
-                    </p>
-                    <p className="text-sm font-bold text-foreground">{server.diskSpace ? String(server.diskSpace).split(' / ')[0] : 'N/A'}</p>
-                  </div>
-                </div>
-              )}
-
-              {/* Technical Footer (only when online) */}
-              {server.status === 'online' && (
-                <div className="pt-4 border-t border-border/40 flex items-center justify-between text-[10px]">
-                  <div className="flex items-center gap-3 text-muted-foreground/70">
-                    <div className="flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      {server.uptime}
+                <>
+                  <div className="p-5 border-b border-border/40 bg-muted/5">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className={`p-2.5 rounded-xl transition-all duration-300 ${
+                          server.status === 'online' 
+                          ? 'bg-success/10 text-success shadow-[0_0_15px_rgba(34,197,94,0.1)]' 
+                          : server.status === 'shutdown' ? 'bg-destructive/10 text-destructive shadow-[0_0_15px_rgba(239,68,68,0.06)]' : 'bg-muted text-muted-foreground'
+                        }`}>
+                          <Server className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-foreground tracking-tight flex items-center gap-2">
+                            {server.name}
+                            <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-primary/10 text-primary uppercase font-bold tracking-tighter">
+                              {server.type}
+                            </span>
+                          </h3>
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <div className={`w-1.5 h-1.5 rounded-full ${
+                              server.status === 'online' ? 'bg-success animate-pulse' : server.status === 'shutdown' ? 'bg-destructive' : 'bg-muted'
+                            }`} />
+                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                              {getStatusLabel(server.status)}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground/40 mx-1">|</span>
+                            <span className="text-[10px] font-mono text-muted-foreground" dir="ltr">{server.ip}:{server.port}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="text-[9px] font-mono text-muted-foreground/50 bg-muted/30 px-1.5 py-0.5 rounded">
+                          ID: {server.id}
+                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-muted/80">
+                              <MoreVertical className="w-4 h-4 text-muted-foreground" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuItem className="gap-2 py-2" onClick={() => { setSelectedServer(server); setIsEditModalOpen(true); }}>
+                              <Edit className="w-4 h-4" />
+                              <span>تعديل الإعدادات</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="gap-2 py-2" onClick={() => handleRestartServer(server.id)}>
+                              <RefreshCw className="w-4 h-4" />
+                              <span>إعادة التشغيل</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem className="gap-2 py-2 text-destructive font-medium" onClick={() => handleDeleteServer(server.id)}>
+                              <Trash2 className="w-4 h-4" />
+                              <span>حذف الخادم</span>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     </div>
-                    <div className="w-1 h-1 rounded-full bg-border" />
-                    <div className="flex items-center gap-1 font-mono">
-                      <RefreshCw className="w-3 h-3" />
-                      {server.lastCheck}
+                  </div>
+
+                  <div className="p-5 space-y-6">
+                    {server.status === 'online' && server.cpuUsage != null && server.ramUsage != null && server.ramTotal != null ? (
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-end text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-1.5">
+                                <Cpu className="w-3 h-3" />
+                                استهلاك المعالج (CPU %)
+                              </div>
+                              <span className={`text-base font-black ${getResourceTextColor(server.cpuUsage)}`}>
+                                {Math.round(server.cpuUsage)}%
+                              </span>
+                            </div>
+                            <SparklineChart 
+                              data={server.history || []} 
+                              color={getResourceStrokeColor(server.cpuUsage)} 
+                              dataKey="cpu" 
+                            />
+                          </div>
+                          <div className="resource-progress overflow-hidden">
+                            <motion.div 
+                              initial={{ width: 0 }}
+                              animate={{ width: `${server.cpuUsage}%` }}
+                              className={`resource-progress-inner ${getResourceColor(server.cpuUsage)}`}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-end text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-1.5">
+                                <HardDrive className="w-3 h-3" />
+                                استهلاك الذاكرة (RAM %)
+                              </div>
+                              <span className={`text-base font-black ${getResourceTextColor((server.ramUsage / server.ramTotal) * 100)}`}>
+                                {Math.round((server.ramUsage / server.ramTotal) * 100)}%
+                              </span>
+                            </div>
+                            <SparklineChart 
+                              data={server.history || []} 
+                              color={getResourceStrokeColor((server.ramUsage / server.ramTotal) * 100)} 
+                              dataKey="ram" 
+                            />
+                          </div>
+                          <div className="resource-progress overflow-hidden">
+                            <motion.div 
+                              initial={{ width: 0 }}
+                              animate={{ width: `${(server.ramUsage / server.ramTotal) * 100}%` }}
+                              className={`resource-progress-inner ${getResourceColor((server.ramUsage / server.ramTotal) * 100)}`}
+                            />
+                          </div>
+                          <div className="flex justify-between text-[9px] text-muted-foreground/60 font-mono mt-1">
+                            <span>{server.ramUsage.toFixed(1)} GB مستخدم</span>
+                            <span>{server.ramTotal} GB إجمالي</span>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-8 text-center rounded-xl bg-muted/10 border border-dashed border-border/40 flex flex-col items-center gap-3">
+                        <AlertTriangle className="w-6 h-6 text-muted-foreground/40" />
+                        <p className="text-[11px] font-bold text-muted-foreground max-w-[180px]">الخادم غير متاح حالياً - تم إيقاف المراقبة الحية للموارد</p>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-4 pb-2">
+                      <div className="p-2.5 rounded-xl bg-muted/30 border border-border/20 transition-colors">
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1.5 mb-1.5">
+                          <Database className="w-3 h-3 text-primary/70" />
+                          الجلسات (نشطة/مسموحة)
+                        </p>
+                        <p className="text-sm font-bold text-foreground">
+                          {server.activeSessions} <span className="text-[10px] text-muted-foreground font-normal">/ {server.maxSessions}</span>
+                        </p>
+                      </div>
+                      <div className="p-2.5 rounded-xl bg-muted/30 border border-border/20 transition-colors">
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1.5 mb-1.5">
+                          <Activity className="w-3 h-3 text-primary/70" />
+                          نوع السيرفر
+                        </p>
+                        <p className="text-sm font-bold text-foreground">{server.runMode}</p>
+                      </div>
+                      <div className="p-2.5 rounded-xl bg-muted/30 border border-border/20 transition-colors">
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1.5 mb-1.5">
+                          <Monitor className="w-3 h-3 text-primary/70" />
+                          نظام التشغيل (OS)
+                        </p>
+                        <p className="text-[11px] font-bold text-foreground truncate">{server.os || 'غير معروف'}</p>
+                      </div>
+                      <div className="p-2.5 rounded-xl bg-muted/30 border border-border/20 transition-colors">
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1.5 mb-1.5">
+                          <Shield className="w-3 h-3 text-primary/70" />
+                          البروتوكول
+                        </p>
+                        <p className="text-sm font-bold text-foreground">{server.protocol}</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3 pt-4 border-t border-border/40">
+                      <div className="flex items-center justify-between text-[10px]">
+                        <span className="text-muted-foreground font-bold uppercase tracking-widest px-2 py-0.5 rounded bg-muted/30 border border-border/10">مساحة القرص (Disk)</span>
+                        <span className="font-mono text-foreground font-bold">{server.diskSpace || 'N/A'}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-[10px]">
+                        <span className="text-muted-foreground font-bold uppercase tracking-widest px-2 py-0.5 rounded bg-muted/30 border border-border/10">وقت التشغيل (Uptime)</span>
+                        <span className="font-mono text-foreground font-bold">{server.uptime || 'N/A'}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-[10px]">
+                        <span className="text-muted-foreground font-bold uppercase tracking-widest px-2 py-0.5 rounded bg-muted/30 border border-border/10">آخر فحص (Last Check)</span>
+                        <span className="font-mono text-primary font-bold">{server.lastCheck}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-[10px] mt-2 pt-3 border-t border-border/10">
+                        <span className="text-muted-foreground font-bold uppercase tracking-widest">رمز الخادم</span>
+                        <span className="font-mono text-muted-foreground/60">{server.code}</span>
+                      </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 font-mono text-muted-foreground/40 bg-muted/50 px-2 py-0.5 rounded border border-border/30">
-                    {server.code}
-                  </div>
-                </div>
+                </>
               )}
-            </div>
+              
+              {server.status === 'online' && (server.cpuUsage > 80 || (server.ramUsage / (server.ramTotal || 1)) > 0.85) && (
+                <div className="absolute inset-0 rounded-2xl border-2 border-destructive animate-pulse pointer-events-none z-10" />
+              )}
+            </motion.div>
+          ))}
+        </div>
+      )}
 
-            {/* High Usage Alert Overlay (SRV-002) */}
-            {server.status === 'online' && (server.cpuUsage > 80 || (server.ramUsage / server.ramTotal) > 0.85) && (
-              <div className="absolute top-0 left-0 w-full h-1 bg-destructive shadow-[0_2px_10px_rgba(239,68,68,0.4)] animate-pulse" />
-            )}
-          </motion.div>
-        ))}
-        {filteredServers.length === 0 && (
-          <div className="col-span-full p-12 text-center bg-muted/20 rounded-2xl border border-dashed border-border py-20 flex flex-col items-center justify-center">
-            <div className="w-16 h-16 rounded-full bg-muted/30 flex items-center justify-center mb-4">
-              <Server className="w-8 h-8 text-muted-foreground/40" />
-            </div>
-            <p className="text-muted-foreground font-medium">لا توجد خوادم تطابق بحثك حالياً</p>
-            <Button variant="link" onClick={() => setSearchQuery('')} className="mt-2 text-primary font-bold">
-              مسح فلاتر البحث
-            </Button>
+
+      {filteredServers.length === 0 && (
+        <div className="p-20 text-center glass-panel rounded-3xl border border-dashed border-border/40 flex flex-col items-center justify-center">
+          <div className="w-20 h-20 rounded-full bg-muted/20 flex items-center justify-center mb-6">
+            <Server className="w-10 h-10 text-muted-foreground/30" />
           </div>
-        )}
-      </div>
+          <h3 className="text-lg font-bold text-foreground">لا توجد خوادم متاحة</h3>
+          <p className="text-sm text-muted-foreground mt-2 max-w-sm">لم نتمكن من العثور على أي خوادم تطابق معايير البحث الحالية.</p>
+          <Button variant="link" onClick={() => setSearchQuery('')} className="mt-4 text-primary font-bold">
+            مسح فلاتر البحث
+          </Button>
+        </div>
+      )}
+
 
       {/* Pagination */}
       <div className="flex flex-col md:flex-row items-center justify-between gap-4 pt-6 border-t border-border/50">
@@ -716,8 +973,8 @@ export default function ServersPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-xs font-bold text-muted-foreground uppercase">نوع السيرفر</Label>
-                <Select value={selectedServer.serverType} onValueChange={(v) => setSelectedServer({ ...selectedServer, serverType: v })}>
+                <Label className="text-xs font-bold text-muted-foreground uppercase">نوع السيرفر (Run Mode)</Label>
+                <Select value={selectedServer.runMode} onValueChange={(v) => setSelectedServer({ ...selectedServer, runMode: v })}>
                   <SelectTrigger className="bg-background">
                     <SelectValue />
                   </SelectTrigger>
