@@ -127,15 +127,17 @@ export default function ServersPage() {
       setServerHistory(prev => {
         const next = { ...prev };
         data.data.servers.forEach((s: any) => {
-          const svc = Array.isArray(s.services) && s.services.length ? s.services[0] : s;
-          const id = svc?.SISEQ ?? s?.SISEQ;
-          const health = svc?.health ?? s?.health;
-          if (id && health) {
-            const cpu = health.cpuPercent ?? 0;
-            const ram = health.memory?.usedGB ? (health.memory.usedGB / (health.memory.totalGB || 1)) * 100 : 0;
-            const currentHistory = next[id] || [];
-            next[id] = [...currentHistory, { cpu, ram }].slice(-10); // Keep last 10 points
-          }
+          const services = Array.isArray(s.services) && s.services.length ? s.services : [s];
+          services.forEach((svc: any) => {
+            const id = svc?.SISEQ ?? s?.SISEQ;
+            const health = svc?.health ?? s?.health;
+            if (id && health) {
+              const cpu = health.cpuPercent ?? 0;
+              const ram = health.memory?.usedGB ? (health.memory.usedGB / (health.memory.totalGB || 1)) * 100 : 0;
+              const currentHistory = next[id] || [];
+              next[id] = [...currentHistory, { cpu, ram }].slice(-10); // Keep last 10 points
+            }
+          });
         });
         return next;
       });
@@ -157,45 +159,52 @@ export default function ServersPage() {
   
   const servers: ServerData[] = rawServers
     .filter(Boolean)
-    .map((s: any, index: number) => {
-      // Prefer service-level entry when provided
-      const svc = Array.isArray(s.services) && s.services.length ? s.services[0] : s;
-      const id = svc?.SISEQ ?? s?.SISEQ ?? index;
-      const health = svc?.health ?? s?.health ?? null;
+    .flatMap((s: any, serverIndex: number) => {
+      // Extract all services or fallback to the server object itself
+      const services = Array.isArray(s.services) && s.services.length > 0 ? s.services : [s];
+      
+      return services.map((svc: any, svcIndex: number) => {
+        const id = svc?.SISEQ ?? s?.SISEQ ?? `${serverIndex}-${svcIndex}`;
+        const health = svc?.health ?? s?.health ?? null;
 
-      // Determine status: if health is explicitly null -> shutdown, otherwise check SIST
-      const status = health === null ? 'shutdown' : ((svc?.SIST ?? s?.SIST) === 1 ? 'online' : 'offline');
+        // Determine status: if health is explicitly null -> shutdown, otherwise check SIST
+        const status = health === null ? 'shutdown' : ((svc?.SIST ?? s?.SIST) === 1 ? 'online' : 'offline');
 
-      // Use only API-provided metrics. If missing, keep null/undefined so UI can hide them.
-      const cpuPercent: number | null = typeof health?.cpuPercent === 'number' ? health.cpuPercent : null;
-      const ramUsed: number | null = typeof health?.memory?.usedGB === 'number' ? health.memory.usedGB : null;
-      const ramTotal: number | null = typeof health?.memory?.totalGB === 'number' ? health.memory.totalGB : null;
-      const readySessions: number = typeof health?.readySessions === 'number' ? health.readySessions : (typeof s?.readyCount === 'number' ? s.readyCount : (typeof s?.sessionCount === 'number' ? s.sessionCount : (svc?.SIMS ?? 0)));
+        // Use only API-provided metrics. If missing, keep null/undefined so UI can hide them.
+        const cpuPercent: number | null = typeof health?.cpuPercent === 'number' ? health.cpuPercent : null;
+        const ramUsed: number | null = typeof health?.memory?.usedGB === 'number' ? health.memory.usedGB : null;
+        const ramTotal: number | null = typeof health?.memory?.totalGB === 'number' ? health.memory.totalGB : null;
+        const readySessions: number = typeof health?.readySessions === 'number' ? health.readySessions : (typeof s?.readyCount === 'number' ? s.readyCount : (typeof s?.sessionCount === 'number' ? s.sessionCount : (svc?.SIMS ?? 0)));
 
-      const uptimeStr = typeof health?.uptime === 'number' ? `${health.uptime} s` : (health?.uptime ? String(health.uptime) : null);
+        const uptimeStr = typeof health?.uptime === 'number' ? `${health.uptime} s` : (health?.uptime ? String(health.uptime) : null);
 
-      return {
-        id: svc?.SISEQ ?? s?.SISEQ ?? index,
-        name: s?.SISN ?? svc?.SISN ?? `Server-${index}`,
-        code: s?.SISN ?? svc?.SISN ?? `SVR-${svc?.SISEQ ?? index}`,
-        type: svc?.SITY ?? s?.SITY ?? 'NORMAL',
-        ip: svc?.SIIP ?? s?.SIIP ?? '0.0.0.0',
-        port: svc?.SIPO ?? s?.SIPO ?? 5021,
-        status,
-        runMode: svc?.SIRM ?? s?.SIRM ?? 'N',
-        maxSessions: svc?.SIMS ?? s?.SIMS ?? 100,
-        activeSessions: readySessions,
-        os: svc?.SIAF1 ?? s?.SIAF1 ?? null,
-        uptime: uptimeStr,
-        cpuUsage: cpuPercent,
-        ramUsage: ramUsed,
-        ramTotal: ramTotal,
-        diskSpace: svc?.SIDE ?? s?.SIDE ?? null,
-        lastCheck: svc?.SILC ? new Date(svc.SILC).toLocaleString('ar-YE') : (s?.SILC ? new Date(s.SILC).toLocaleString('ar-YE') : ''),
-        location: svc?.SIAF2 ?? s?.SIAF2 ?? '',
-        protocol: svc?.SIPT ?? s?.SIPT ?? 'HTTP',
-        history: serverHistory[id] || [],
-      };
+        // Derive the name - if it's a sub-service, we might want to show both parent and sub-service name or just service name
+        // Based on user JSON: Parent SISN is "SER2", Service SISN is also "SER2". SITY is "EMA_v2" vs "FGA".
+        const displayName = svc?.SISN ?? s?.SISN ?? `Server-${serverIndex}`;
+
+        return {
+          id: svc?.SISEQ ?? s?.SISEQ ?? `${serverIndex}-${svcIndex}`,
+          name: displayName,
+          code: svc?.SITY ?? s?.SITY ?? displayName, // Use SITY as a code for better identification
+          type: svc?.SITY ?? s?.SITY ?? 'NORMAL',
+          ip: svc?.SIIP ?? s?.SIIP ?? '0.0.0.0',
+          port: svc?.SIPO ?? s?.SIPO ?? 5021,
+          status,
+          runMode: svc?.SIRM ?? s?.SIRM ?? 'N',
+          maxSessions: svc?.SIMS ?? s?.SIMS ?? 100,
+          activeSessions: readySessions,
+          os: svc?.SIAF1 ?? s?.SIAF1 ?? null,
+          uptime: uptimeStr,
+          cpuUsage: cpuPercent,
+          ramUsage: ramUsed,
+          ramTotal: ramTotal,
+          diskSpace: svc?.SIDE ?? s?.SIDE ?? null,
+          lastCheck: svc?.SILC ? new Date(svc.SILC).toLocaleString('ar-YE') : (s?.SILC ? new Date(s.SILC).toLocaleString('ar-YE') : ''),
+          location: svc?.SIAF2 ?? s?.SIAF2 ?? '',
+          protocol: svc?.SIPT ?? s?.SIPT ?? 'HTTP',
+          history: serverHistory[id] || [],
+        };
+      });
     });
 
   const filteredServers = servers.filter(
