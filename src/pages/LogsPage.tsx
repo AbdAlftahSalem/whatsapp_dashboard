@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   FileText,
@@ -68,26 +68,36 @@ export default function LogsPage() {
   const totalLogs = logs.length;
   const totalPages = Math.ceil(totalLogs / pageSize);
 
-  const filteredLogs = logs.filter((log) => {
-    const searchLower = searchQuery.toLowerCase();
-    const payloadString = log.SAPA ? JSON.stringify(log.SAPA).toLowerCase() : '';
+  const { filteredLogs, searchTime } = useMemo(() => {
+    const start = performance.now();
     
-    // Level Filter logic
-    const matchesLevel = levelFilter === 'all' || 
-      (log.SATY?.toUpperCase().includes(levelFilter.toUpperCase()) ?? false);
+    const filtered = logs.filter((log) => {
+      const searchLower = searchQuery.toLowerCase();
+      const payloadString = log.SAPA ? JSON.stringify(log.SAPA).toLowerCase() : '';
+      
+      // Level Filter logic
+      const matchesLevel = levelFilter === 'all' || 
+        (log.SATY?.toUpperCase().includes(levelFilter.toUpperCase()) ?? false);
 
-    if (!matchesLevel) return false;
+      if (!matchesLevel) return false;
 
-    return (
-      (log.SAMSG?.toLowerCase().includes(searchLower) ?? false) ||
-      (log.CIORG?.toLowerCase().includes(searchLower) ?? false) ||
-      (log.USER?.toLowerCase().includes(searchLower) ?? false) ||
-      (log.SATOP?.toLowerCase().includes(searchLower) ?? false) ||
-      (log.SAFN?.toLowerCase().includes(searchLower) ?? false) ||
-      (log.SARO?.toLowerCase().includes(searchLower) ?? false) ||
-      payloadString.includes(searchLower)
-    );
-  }).sort((a, b) => b.SASEQ - a.SASEQ);
+      return (
+        (log.SAMSG?.toLowerCase().includes(searchLower) ?? false) ||
+        (log.CIORG?.toLowerCase().includes(searchLower) ?? false) ||
+        (log.USER?.toLowerCase().includes(searchLower) ?? false) ||
+        (log.SATOP?.toLowerCase().includes(searchLower) ?? false) ||
+        (log.SAFN?.toLowerCase().includes(searchLower) ?? false) ||
+        (log.SARO?.toLowerCase().includes(searchLower) ?? false) ||
+        payloadString.includes(searchLower)
+      );
+    }).sort((a, b) => b.SASEQ - a.SASEQ);
+
+    const end = performance.now();
+    return {
+      filteredLogs: filtered,
+      searchTime: ((end - start) / 1000).toFixed(3)
+    };
+  }, [logs, searchQuery, levelFilter]);
 
   const pagedLogs = filteredLogs.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
@@ -256,7 +266,7 @@ export default function LogsPage() {
           <div className="flex items-center justify-between">
             <div className="space-y-1">
               <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">سرعة البحث</p>
-              <h4 className="text-2xl font-black text-foreground">0.05s</h4>
+              <h4 className="text-2xl font-black text-foreground">{searchTime}s</h4>
             </div>
             <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center text-muted-foreground">
               <RefreshCw className="w-5 h-5" />
