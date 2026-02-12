@@ -12,25 +12,32 @@ import {
   HardDrive,
   Activity,
   Power,
+  AlertTriangle,
+  Table as TableIcon,
+  ArrowUpDown,
+  Edit2,
+  Building2,
+  Calendar,
+  MoreHorizontal,
+  Wifi,
+  WifiOff,
   CheckCircle,
   XCircle,
   Loader2,
-  Globe,
-  Settings,
-  Shield,
-  Clock,
   Database,
   Monitor,
   LayoutGrid,
   ChevronLeft,
   ChevronRight,
-  AlertTriangle,
-  List,
-  Table as TableIcon,
+  Shield,
+  Settings,
+  Globe,
+  Clock,
 } from 'lucide-react';
 import { Area, AreaChart, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { StatusBadge } from '@/components/ui/StatusBadge';
 import {
   Select,
   SelectContent,
@@ -84,7 +91,11 @@ interface ServerData {
 
 export default function ServersPage() {
   const [searchQuery, setSearchQuery] = useState('');
-  const [viewMode, setViewMode] = useState<'cards' | 'tiles' | 'table'>('cards');
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
+  const [sortConfig, setSortConfig] = useState<{ key: keyof ServerData, direction: 'asc' | 'desc' }>({
+    key: 'id',
+    direction: 'asc'
+  });
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedServer, setSelectedServer] = useState<ServerData | null>(null);
@@ -194,8 +205,28 @@ export default function ServersPage() {
       server.code.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const handleSort = (key: keyof ServerData) => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  };
+
+  const sortedServers = [...filteredServers].sort((a, b) => {
+    const { key, direction } = sortConfig;
+    let valA = a[key];
+    let valB = b[key];
+
+    if (valA === null || valA === undefined) valA = '' as any;
+    if (valB === null || valB === undefined) valB = '' as any;
+
+    if (valA < valB) return direction === 'asc' ? -1 : 1;
+    if (valA > valB) return direction === 'asc' ? 1 : -1;
+    return 0;
+  });
+
   const totalPages = Math.ceil(filteredServers.length / pageSize);
-  const paginatedServers = filteredServers.slice(
+  const paginatedServers = sortedServers.slice(
     (currentPage - 1) * pageSize,
     currentPage * pageSize
   );
@@ -448,15 +479,6 @@ export default function ServersPage() {
               بطاقات
             </Button>
             <Button
-              variant={viewMode === 'tiles' ? 'secondary' : 'ghost'}
-              size="sm"
-              onClick={() => setViewMode('tiles')}
-              className="h-8 px-3 rounded-lg text-xs font-bold gap-2"
-            >
-              <List className="w-3.5 h-3.5" />
-              مربعات
-            </Button>
-            <Button
               variant={viewMode === 'table' ? 'secondary' : 'ghost'}
               size="sm"
               onClick={() => setViewMode('table')}
@@ -474,25 +496,54 @@ export default function ServersPage() {
       </div>
 
 
-      {/* Server Grid / Table / Tiles */}
+      {/* Server Grid / Table */}
       {viewMode === 'table' ? (
-        <div className="glass-panel overflow-hidden border border-border/40 rounded-2xl shadow-2xl shadow-black/5">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="data-table"
+        >
           <div className="overflow-x-auto">
-            <table className="w-full text-right">
+            <table className="w-full text-right whitespace-nowrap">
               <thead>
-                <tr className="bg-muted/30 border-b border-border/40">
-                  <th className="px-6 py-4 text-[10px] font-black text-muted-foreground uppercase tracking-widest">الخادم</th>
-                  <th className="px-6 py-4 text-[10px] font-black text-muted-foreground uppercase tracking-widest">الحالة</th>
-                  <th className="px-6 py-4 text-[10px] font-black text-muted-foreground uppercase tracking-widest">عنوان IP</th>
-                  <th className="px-6 py-4 text-[10px] font-black text-muted-foreground uppercase tracking-widest">الجلسات</th>
-                  <th className="px-6 py-4 text-[10px] font-black text-muted-foreground uppercase tracking-widest">الموارد</th>
-                  <th className="px-6 py-4 text-[10px] font-black text-muted-foreground uppercase tracking-widest">نظام التشغيل</th>
-                  <th className="px-6 py-4 text-[10px] font-black text-muted-foreground uppercase tracking-widest text-left">إجراءات</th>
+                <tr className="bg-muted/30">
+                  <th className="min-w-[80px] cursor-pointer hover:bg-muted" onClick={() => handleSort('id')}>
+                    <div className="flex items-center gap-1">معرف <ArrowUpDown className="w-3 h-3" /></div>
+                  </th>
+                  <th className="min-w-[180px] cursor-pointer hover:bg-muted" onClick={() => handleSort('name')}>
+                    <div className="flex items-center gap-1 text-[10px] uppercase font-black tracking-widest">اسم الخادم <ArrowUpDown className="w-3 h-3" /></div>
+                  </th>
+                  <th className="min-w-[120px] cursor-pointer hover:bg-muted" onClick={() => handleSort('status')}>
+                    <div className="flex items-center gap-1 text-[10px] uppercase font-black tracking-widest">الحالة <ArrowUpDown className="w-3 h-3" /></div>
+                  </th>
+                  <th className="min-w-[150px]">عنوان IP</th>
+                  <th className="min-w-[100px] cursor-pointer hover:bg-muted" onClick={() => handleSort('activeSessions')}>
+                    <div className="flex items-center gap-1 text-[10px] uppercase font-black tracking-widest">الجلسات <ArrowUpDown className="w-3 h-3" /></div>
+                  </th>
+                  <th className="min-w-[120px] cursor-pointer hover:bg-muted" onClick={() => handleSort('cpuUsage')}>
+                    <div className="flex items-center gap-1 text-[10px] uppercase font-black tracking-widest">CPU <ArrowUpDown className="w-3 h-3" /></div>
+                  </th>
+                  <th className="min-w-[120px] cursor-pointer hover:bg-muted" onClick={() => handleSort('ramUsage')}>
+                    <div className="flex items-center gap-1 text-[10px] uppercase font-black tracking-widest">RAM <ArrowUpDown className="w-3 h-3" /></div>
+                  </th>
+                  <th className="min-w-[140px]">نظام التشغيل</th>
+                  <th className="min-w-[140px]">آخر فحص</th>
+                  <th className="min-w-[100px]">البروتوكول</th>
+                  <th className="sticky left-0 z-10 bg-muted/50 text-[10px] uppercase font-black tracking-widest text-left" style={{ backgroundColor: "oklch(96.8% 0.007 247.896)" }}>
+                    إجراءات
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/20">
-                {paginatedServers.map((server) => (
-                  <tr key={server.id} className="hover:bg-muted/10 transition-colors group">
+                {paginatedServers.map((server, index) => (
+                  <motion.tr 
+                    key={server.id}
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.03 }}
+                    className="hover:bg-muted/10 transition-colors group"
+                  >
+                    <td className="px-6 py-4 font-mono text-xs">{server.id}</td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <div className={`p-2 rounded-lg ${server.status === 'online' ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'}`}>
@@ -500,117 +551,103 @@ export default function ServersPage() {
                         </div>
                         <div>
                           <p className="text-sm font-bold text-foreground">{server.name}</p>
-                          <p className="text-[10px] text-muted-foreground uppercase">{server.type}</p>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-primary/10 text-primary uppercase font-bold tracking-tighter">
+                              {server.type}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <div className={`w-1.5 h-1.5 rounded-full ${server.status === 'online' ? 'bg-success animate-pulse' : 'bg-muted'}`} />
-                        <span className="text-xs font-bold text-muted-foreground">{getStatusLabel(server.status)}</span>
-                      </div>
+                      <StatusBadge status={server.status === 'online' ? 'active' : (server.status === 'shutdown' ? 'critical' : 'inactive')} />
                     </td>
                     <td className="px-6 py-4">
                       <p className="text-xs font-mono text-muted-foreground" dir="ltr">{server.ip}:{server.port}</p>
                     </td>
                     <td className="px-6 py-4">
-                      <p className="text-xs font-bold">{server.activeSessions} / {server.maxSessions}</p>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-4">
-                        <div className="flex flex-col gap-1 w-20">
-                          <span className="text-[9px] text-muted-foreground uppercase font-black">CPU: {Math.round(server.cpuUsage || 0)}%</span>
-                          <Progress value={server.cpuUsage || 0} className="h-1" />
-                        </div>
-                        <div className="flex flex-col gap-1 w-20">
-                          <span className="text-[9px] text-muted-foreground uppercase font-black">RAM: {Math.round((server.ramUsage || 0) / (server.ramTotal || 1) * 100)}%</span>
-                          <Progress value={(server.ramUsage || 0) / (server.ramTotal || 1) * 100} className="h-1" />
-                        </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold">{server.activeSessions}</span>
+                        <span className="text-muted-foreground/30">/</span>
+                        <span className="text-xs text-muted-foreground/60">{server.maxSessions}</span>
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <span className="text-xs text-muted-foreground/80">{server.os || 'N/A'}</span>
+                      <div className="flex flex-col gap-1 w-24">
+                        <div className="flex justify-between text-[9px] font-black uppercase">
+                          <span className="text-muted-foreground">CPU</span>
+                          <span className={getResourceTextColor(server.cpuUsage || 0)}>{Math.round(server.cpuUsage || 0)}%</span>
+                        </div>
+                        <Progress value={server.cpuUsage || 0} className="h-1 shadow-sm" />
+                      </div>
                     </td>
-                    <td className="px-6 py-4 text-left">
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col gap-1 w-24">
+                        <div className="flex justify-between text-[9px] font-black uppercase">
+                          <span className="text-muted-foreground">RAM</span>
+                          <span className={getResourceTextColor((server.ramUsage || 0) / (server.ramTotal || 1) * 100)}>
+                            {Math.round((server.ramUsage || 0) / (server.ramTotal || 1) * 100)}%
+                          </span>
+                        </div>
+                        <Progress value={(server.ramUsage || 0) / (server.ramTotal || 1) * 100} className="h-1 shadow-sm" />
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-xs text-muted-foreground/80">{server.os || 'N/A'}</span>
+                        <span className="text-[9px] text-muted-foreground/40 font-mono uppercase tracking-tighter">
+                          {server.uptime || '0s uptime'}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <p className="text-[10px] font-mono whitespace-nowrap opacity-60">{server.lastCheck}</p>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="text-[10px] font-bold text-muted-foreground bg-muted/50 px-2 py-0.5 rounded border border-border/10 uppercase tracking-widest">
+                        {server.protocol}
+                      </span>
+                    </td>
+                    <td className="sticky left-0 bg-background/95 backdrop-blur-sm border-r px-4 py-4 text-left">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <MoreVertical className="w-4 h-4" />
+                          <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg">
+                            <MoreHorizontal className="w-4 h-4" />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start">
-                          <DropdownMenuItem onClick={() => { setSelectedServer(server); setIsEditModalOpen(true); }}>تعديل</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleRestartServer(server.id)}>إعادة تشغيل</DropdownMenuItem>
+                        <DropdownMenuContent align="start" className="w-48">
+                          <DropdownMenuItem className="gap-2" onClick={() => { setSelectedServer(server); setIsEditModalOpen(true); }}>
+                            <Edit2 className="w-4 h-4" />
+                            تعديل
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className="gap-2" onClick={() => handleRestartServer(server.id)}>
+                            <RefreshCw className="w-4 h-4" />
+                            إعادة تشغيل
+                          </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteServer(server.id)}>حذف</DropdownMenuItem>
+                          <DropdownMenuItem className="text-destructive gap-2" onClick={() => handleDeleteServer(server.id)}>
+                            <Trash2 className="w-4 h-4" />
+                            حذف
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </td>
-                  </tr>
+                  </motion.tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </div>
+        </motion.div>
       ) : (
-        <div className={`grid gap-6 ${viewMode === 'tiles' ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6' : 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3'}`}>
+        <div className="grid gap-6 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
           {paginatedServers.map((server, index) => (
             <motion.div
               key={server.id}
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: index * 0.05 }}
-              className={`premium-card group relative ${viewMode === 'tiles' ? 'p-4' : ''}`}
+              className="premium-card group relative"
             >
-              {viewMode === 'tiles' ? (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className={`p-2 rounded-xl ${server.status === 'online' ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'}`}>
-                      <Server className="w-4 h-4" />
-                    </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <MoreVertical className="w-3 h-3" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => { setSelectedServer(server); setIsEditModalOpen(true); }}>تعديل</DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleRestartServer(server.id)}>إعادة التشغيل</DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-black truncate">{server.name}</h4>
-                    <p className="text-[9px] font-mono text-muted-foreground truncate" dir="ltr">{server.ip}</p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between text-[8px] font-bold text-muted-foreground">
-                        <span>CPU</span>
-                        <span className={getResourceTextColor(server.cpuUsage || 0)}>{Math.round(server.cpuUsage || 0)}%</span>
-                      </div>
-                      <Progress value={server.cpuUsage || 0} className="h-1" />
-                    </div>
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between text-[8px] font-bold text-muted-foreground">
-                        <span>RAM</span>
-                        <span className={getResourceTextColor((server.ramUsage || 0) / (server.ramTotal || 1) * 100)}>
-                          {Math.round((server.ramUsage || 0) / (server.ramTotal || 1) * 100)}%
-                        </span>
-                      </div>
-                      <Progress value={(server.ramUsage || 0) / (server.ramTotal || 1) * 100} className="h-1" />
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between pt-2 border-t border-border/10">
-                    <div className="flex items-center gap-1">
-                      <div className={`w-1 h-1 rounded-full ${server.status === 'online' ? 'bg-success' : 'bg-muted'}`} />
-                      <span className="text-[9px] font-bold">{getStatusLabel(server.status)}</span>
-                    </div>
-                    <span className="text-[9px] text-muted-foreground font-bold">{server.activeSessions}/{server.maxSessions}</span>
-                  </div>
-                </div>
-              ) : (
                 <>
                   <div className="p-5 border-b border-border/40 bg-muted/5">
                     <div className="flex items-start justify-between">
@@ -772,10 +809,6 @@ export default function ServersPage() {
 
                     <div className="space-y-3 pt-4 border-t border-border/40">
                       <div className="flex items-center justify-between text-[10px]">
-                        <span className="text-muted-foreground font-bold uppercase tracking-widest px-2 py-0.5 rounded bg-muted/30 border border-border/10">مساحة القرص (Disk)</span>
-                        <span className="font-mono text-foreground font-bold">{server.diskSpace || 'N/A'}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-[10px]">
                         <span className="text-muted-foreground font-bold uppercase tracking-widest px-2 py-0.5 rounded bg-muted/30 border border-border/10">وقت التشغيل (Uptime)</span>
                         <span className="font-mono text-foreground font-bold">{server.uptime || 'N/A'}</span>
                       </div>
@@ -790,7 +823,6 @@ export default function ServersPage() {
                     </div>
                   </div>
                 </>
-              )}
               
               {server.status === 'online' && (server.cpuUsage > 80 || (server.ramUsage / (server.ramTotal || 1)) > 0.85) && (
                 <div className="absolute inset-0 rounded-2xl border-2 border-destructive animate-pulse pointer-events-none z-10" />
