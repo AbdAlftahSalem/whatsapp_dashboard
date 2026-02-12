@@ -64,7 +64,8 @@ import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
-import { getServers } from '@/lib/api';
+import { getServers, addServer, deleteServer } from '@/lib/api';
+import { useAuthStore } from '@/stores/authStore';
 
 interface ServerData {
   id: number;
@@ -100,20 +101,36 @@ export default function ServersPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedServer, setSelectedServer] = useState<ServerData | null>(null);
   const [serverHistory, setServerHistory] = useState<Record<number, { cpu: number; ram: number }[]>>({});
+  const [isSubmittingServer, setIsSubmittingServer] = useState(false);
   
   const [newServer, setNewServer] = useState({ 
-    name: '', 
-    ip: '', 
-    port: '5021', 
-    type: 'NORMAL',
-    maxSessions: '100'
+    SISN: '',           // رمز الخادم (Server Name/Code)
+    SITY: 'NORMAL',     // نوع الخدمة (Server Type)
+    SIIP: '',           // عنوان IP
+    SIPO: '5021',       // المنفذ
+    SIPT: 'HTTP',       // البروتوكول
+    SIST: 1,            // حالة الخدمة
+    SIRM: 'N',          // SERVICE_RUN_MODE
+    SIRT: 'PATH',       // نوع التوجيه
+    SIMS: '250',        // الحد الأقصى للجلسات
+    SIAUY: '2',         // هل الخدمة تحتاج AUTH
+    SIWE: '1',          // وزن السيرفر
+    SITMS: '15000',     // مهلة الاتصال
+    SIMC: '100',        // الحد الأقصى للاتصالات المتزامنة
+    SIDE: '',           // تفاصيل
+    SIAF1: '',          // حقل إضافي 1
+    SIAF2: '',          // حقل إضافي 2
   });
   
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [jitter, setJitter] = useState({ cpu: 0, ram: 0 });
+  const [deletingServerId, setDeletingServerId] = useState<number | null>(null);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [serverToDelete, setServerToDelete] = useState<ServerData | null>(null);
 
   const { toast } = useToast();
+  const { accessToken: token } = useAuthStore();
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['servers'],
@@ -265,10 +282,29 @@ export default function ServersPage() {
     </div>
   );
 
-  const handleAddServer = () => {
+  const handleAddServer = async () => {
+    // Validation
+    if (!newServer.SISN?.trim()) {
+      toast({ 
+        title: 'حقل مطلوب', 
+        description: 'يرجى إدخال رمز الخادم (Server Name)',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    if (!newServer.SIIP?.trim()) {
+      toast({ 
+        title: 'حقل مطلوب', 
+        description: 'يرجى إدخال عنوان IP',
+        variant: 'destructive'
+      });
+      return;
+    }
+
     // Basic IP Validation
     const ipRegex = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/;
-    if (!ipRegex.test(newServer.ip)) {
+    if (!ipRegex.test(newServer.SIIP)) {
       toast({ 
         title: 'خطأ في التحقق', 
         description: 'يرجى إدخال عنوان IP صحيح (مثال: 192.168.1.1)',
@@ -277,17 +313,95 @@ export default function ServersPage() {
       return;
     }
 
-    if (!newServer.name) {
+    if (!newServer.SIPO || isNaN(parseInt(newServer.SIPO as any))) {
       toast({ 
-        title: 'حقول مطلوبة', 
-        description: 'يرجى إدخال اسم الخادم',
+        title: 'حقل مطلوب', 
+        description: 'يرجى إدخال رقم منفذ صحيح',
         variant: 'destructive'
       });
       return;
     }
 
-    toast({ title: 'تمت الإضافة بنجاح', description: 'تمت إضافة الخادم بنجاح (محاكاة)' });
-    setIsAddModalOpen(false);
+    if (!token) {
+      toast({ 
+        title: 'خطأ', 
+        description: 'انتهت الجلسة، يرجى تسجيل الدخول مجدداً',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    setIsSubmittingServer(true);
+
+    try {
+      const serverPayload = {
+        SISN: newServer.SISN.trim(),
+        SITY: newServer.SITY,
+        SIIP: newServer.SIIP.trim(),
+        SIPO: parseInt(newServer.SIPO as any),
+        SIPT: newServer.SIPT,
+        SIST: newServer.SIST,
+        SIRM: newServer.SIRM,
+        SIRT: newServer.SIRT,
+        SIMS: parseInt(newServer.SIMS as any),
+        SIAUY: parseInt(newServer.SIAUY as any),
+        SIWE: parseInt(newServer.SIWE as any),
+        SITMS: parseInt(newServer.SITMS as any),
+        SIMC: parseInt(newServer.SIMC as any),
+        ...(newServer.SIDE && { SIDE: newServer.SIDE.trim() }),
+        ...(newServer.SIAF1 && { SIAF1: newServer.SIAF1.trim() }),
+        ...(newServer.SIAF2 && { SIAF2: newServer.SIAF2.trim() }),
+      };
+
+      const response = await addServer(serverPayload, token);
+
+      if (response.status) {
+        toast({ 
+          title: 'تمت الإضافة بنجاح', 
+          description: `تمت إضافة الخادم ${newServer.SISN} بنجاح`,
+          variant: 'default'
+        });
+        
+        setIsAddModalOpen(false);
+        
+        // Reset form
+        setNewServer({ 
+          SISN: '',
+          SITY: 'NORMAL',
+          SIIP: '',
+          SIPO: '5021',
+          SIPT: 'HTTP',
+          SIST: 1,
+          SIRM: 'N',
+          SIRT: 'PATH',
+          SIMS: '250',
+          SIAUY: '2',
+          SIWE: '1',
+          SITMS: '15000',
+          SIMC: '100',
+          SIDE: '',
+          SIAF1: '',
+          SIAF2: '',
+        });
+
+        // Refresh servers list
+        refetch();
+      } else {
+        toast({ 
+          title: 'خطأ', 
+          description: response.message || 'فشل في إضافة الخادم',
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      toast({ 
+        title: 'خطأ', 
+        description: error instanceof Error ? error.message : 'حدث خطأ أثناء إضافة الخادم',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsSubmittingServer(false);
+    }
   };
 
   const handleEditServer = () => {
@@ -297,8 +411,57 @@ export default function ServersPage() {
   };
 
   const handleDeleteServer = (id: number) => {
-    // In a real app, this would be an API call
-    toast({ title: 'ميزة حذف خادم ستتوفر قريباً عبر الـ API', variant: 'destructive' });
+    // Find the server to get its details
+    const server = servers.find(s => s.id === id);
+    if (server) {
+      setServerToDelete(server);
+      setIsDeleteConfirmOpen(true);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!serverToDelete || !token) {
+      toast({ 
+        title: 'خطأ', 
+        description: 'معلومات الخادم غير متوفرة',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    setDeletingServerId(serverToDelete.id as number);
+
+    try {
+      const response = await deleteServer(serverToDelete.id as number, token);
+
+      if (response.status) {
+        toast({ 
+          title: 'تم الحذف بنجاح', 
+          description: `تم حذف الخادم ${serverToDelete.name} بنجاح`,
+          variant: 'default'
+        });
+        
+        setIsDeleteConfirmOpen(false);
+        setServerToDelete(null);
+        
+        // Refresh servers list
+        refetch();
+      } else {
+        toast({ 
+          title: 'خطأ', 
+          description: response.message || 'فشل في حذف الخادم',
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      toast({ 
+        title: 'خطأ', 
+        description: error instanceof Error ? error.message : 'حدث خطأ أثناء حذف الخادم',
+        variant: 'destructive'
+      });
+    } finally {
+      setDeletingServerId(null);
+    }
   };
 
   const handleRestartServer = (id: number) => {
@@ -571,7 +734,7 @@ export default function ServersPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <StatusBadge status={server.status === 'online' ? 'active' : (server.status === 'shutdown' ? 'critical' : 'inactive')} />
+                      <StatusBadge status={server.status === 'online' ? 'active' : 'inactive'} />
                     </td>
                     <td className="px-6 py-4">
                       <p className="text-xs font-mono text-muted-foreground" dir="ltr">{server.ip}:{server.port}</p>
@@ -962,65 +1125,233 @@ export default function ServersPage() {
 
       {/* Add Server Modal (SRV-003) */}
       <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold">إضافة خادم جديد</DialogTitle>
-            <DialogDescription>أدخل معلومات الخادم الجديد لتشغيل الخدمات عليه</DialogDescription>
+            <DialogDescription>أدخل معلومات الخادم الجديد لتشغيل الخدمات عليه. جميع الحقول المشار إليها بـ * مطلوبة.</DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-4 py-4">
-            <div className="col-span-2 space-y-2">
-              <Label className="text-xs font-bold text-muted-foreground uppercase">اسم الخادم (Server Name)</Label>
+            {/* Row 1: Server Name & Server Type */}
+            <div className="space-y-2">
+              <Label className="text-xs font-bold text-muted-foreground uppercase">رمز الخادم * (Server Name)</Label>
               <Input
-                value={newServer.name}
-                onChange={(e) => setNewServer({ ...newServer, name: e.target.value })}
-                placeholder="مثال: خادم الرسائل الرئيسي"
+                value={newServer.SISN}
+                onChange={(e) => setNewServer({ ...newServer, SISN: e.target.value })}
+                placeholder="SER1, SER2, ..."
+                disabled={isSubmittingServer}
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-xs font-bold text-muted-foreground uppercase">عنوان IP</Label>
-              <Input
-                value={newServer.ip}
-                onChange={(e) => setNewServer({ ...newServer, ip: e.target.value })}
-                placeholder="192.168.1.1"
-                dir="ltr"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-xs font-bold text-muted-foreground uppercase">المنفذ (Port)</Label>
-              <Input
-                value={newServer.port}
-                onChange={(e) => setNewServer({ ...newServer, port: e.target.value })}
-                placeholder="5021"
-                dir="ltr"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-xs font-bold text-muted-foreground uppercase">نوع السيرفر</Label>
-              <Select value={newServer.type} onValueChange={(v) => setNewServer({ ...newServer, type: v })}>
+              <Label className="text-xs font-bold text-muted-foreground uppercase">نوع الخدمة</Label>
+              <Select value={newServer.SITY} onValueChange={(v) => setNewServer({ ...newServer, SITY: v })} disabled={isSubmittingServer}>
                 <SelectTrigger className="bg-background">
                   <SelectValue placeholder="اختر النوع" />
                 </SelectTrigger>
                 <SelectContent dir="rtl">
                   <SelectItem value="NORMAL">NORMAL</SelectItem>
+                  <SelectItem value="V2">V2</SelectItem>
+                  <SelectItem value="V3">V3</SelectItem>
+                  <SelectItem value="GFA">GFA</SelectItem>
+                  <SelectItem value="EMA_v2">EMA_v2</SelectItem>
                   <SelectItem value="CONTROL">CONTROL</SelectItem>
                   <SelectItem value="M">M</SelectItem>
                   <SelectItem value="B">B</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Row 2: IP & Port */}
             <div className="space-y-2">
-              <Label className="text-xs font-bold text-muted-foreground uppercase">الحد الأقصى للجلسات</Label>
+              <Label className="text-xs font-bold text-muted-foreground uppercase">عنوان IP * (إجباري)</Label>
+              <Input
+                value={newServer.SIIP}
+                onChange={(e) => setNewServer({ ...newServer, SIIP: e.target.value })}
+                placeholder="192.168.1.1"
+                dir="ltr"
+                disabled={isSubmittingServer}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-bold text-muted-foreground uppercase">المنفذ * (Port)</Label>
               <Input
                 type="number"
-                value={newServer.maxSessions}
-                onChange={(e) => setNewServer({ ...newServer, maxSessions: e.target.value })}
+                value={newServer.SIPO}
+                onChange={(e) => setNewServer({ ...newServer, SIPO: e.target.value })}
+                placeholder="5021"
+                dir="ltr"
+                disabled={isSubmittingServer}
+              />
+            </div>
+
+            {/* Row 3: Protocol & Max Sessions */}
+            <div className="space-y-2">
+              <Label className="text-xs font-bold text-muted-foreground uppercase">البروتوكول</Label>
+              <Select value={newServer.SIPT} onValueChange={(v) => setNewServer({ ...newServer, SIPT: v })} disabled={isSubmittingServer}>
+                <SelectTrigger className="bg-background">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent dir="rtl">
+                  <SelectItem value="HTTP">HTTP</SelectItem>
+                  <SelectItem value="HTTPS">HTTPS</SelectItem>
+                  <SelectItem value="TCP">TCP</SelectItem>
+                  <SelectItem value="UDP">UDP</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-bold text-muted-foreground uppercase">الحد الأقصى للجلسات (رقم)</Label>
+              <Input
+                type="number"
+                value={newServer.SIMS}
+                onChange={(e) => setNewServer({ ...newServer, SIMS: e.target.value })}
+                placeholder="250"
+                disabled={isSubmittingServer}
+              />
+            </div>
+
+            {/* Row 4: Run Mode & Routing Type */}
+            <div className="space-y-2">
+              <Label className="text-xs font-bold text-muted-foreground uppercase">نمط التشغيل</Label>
+              <Select value={newServer.SIRM} onValueChange={(v) => setNewServer({ ...newServer, SIRM: v })} disabled={isSubmittingServer}>
+                <SelectTrigger className="bg-background">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent dir="rtl">
+                  <SelectItem value="N">Normal (N)</SelectItem>
+                  <SelectItem value="C">Cache (C)</SelectItem>
+                  <SelectItem value="M">Mirror (M)</SelectItem>
+                  <SelectItem value="A">Advanced (A)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-bold text-muted-foreground uppercase">نوع التوجيه</Label>
+              <Select value={newServer.SIRT} onValueChange={(v) => setNewServer({ ...newServer, SIRT: v })} disabled={isSubmittingServer}>
+                <SelectTrigger className="bg-background">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent dir="rtl">
+                  <SelectItem value="PATH">PATH</SelectItem>
+                  <SelectItem value="HOST">HOST</SelectItem>
+                  <SelectItem value="REGEX">REGEX</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Row 5: Authentication & Server Status */}
+            <div className="space-y-2">
+              <Label className="text-xs font-bold text-muted-foreground uppercase">المصادقة مطلوبة؟</Label>
+              <Select value={newServer.SIAUY?.toString()} onValueChange={(v) => setNewServer({ ...newServer, SIAUY: v })} disabled={isSubmittingServer}>
+                <SelectTrigger className="bg-background">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent dir="rtl">
+                  <SelectItem value="1">نعم (Yes)</SelectItem>
+                  <SelectItem value="2">لا (No)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-bold text-muted-foreground uppercase">حالة الخدمة</Label>
+              <Select value={newServer.SIST?.toString()} onValueChange={(v) => setNewServer({ ...newServer, SIST: parseInt(v) })} disabled={isSubmittingServer}>
+                <SelectTrigger className="bg-background">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent dir="rtl">
+                  <SelectItem value="1">مفعلة (Active)</SelectItem>
+                  <SelectItem value="0">معطلة (Inactive)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Row 6: Timeout & Max Connections */}
+            <div className="space-y-2">
+              <Label className="text-xs font-bold text-muted-foreground uppercase">مهلة الاتصال (ms)</Label>
+              <Input
+                type="number"
+                value={newServer.SITMS}
+                onChange={(e) => setNewServer({ ...newServer, SITMS: e.target.value })}
+                placeholder="15000"
+                disabled={isSubmittingServer}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-bold text-muted-foreground uppercase">الحد الأقصى للاتصالات</Label>
+              <Input
+                type="number"
+                value={newServer.SIMC}
+                onChange={(e) => setNewServer({ ...newServer, SIMC: e.target.value })}
                 placeholder="100"
+                disabled={isSubmittingServer}
+              />
+            </div>
+
+            {/* Row 7: Server Weight */}
+            <div className="space-y-2">
+              <Label className="text-xs font-bold text-muted-foreground uppercase">وزن السيرفر</Label>
+              <Input
+                type="number"
+                value={newServer.SIWE}
+                onChange={(e) => setNewServer({ ...newServer, SIWE: e.target.value })}
+                placeholder="1"
+                disabled={isSubmittingServer}
+              />
+            </div>
+
+            {/* Row 8: Details (Full Width) */}
+            <div className="col-span-2 space-y-2">
+              <Label className="text-xs font-bold text-muted-foreground uppercase">التفاصيل إضافية</Label>
+              <Input
+                value={newServer.SIDE}
+                onChange={(e) => setNewServer({ ...newServer, SIDE: e.target.value })}
+                placeholder="أي ملاحظات إضافية عن الخادم"
+                disabled={isSubmittingServer}
+              />
+            </div>
+
+            {/* Row 9: Additional Fields */}
+            <div className="space-y-2">
+              <Label className="text-xs font-bold text-muted-foreground uppercase">حقل إضافي 1</Label>
+              <Input
+                value={newServer.SIAF1}
+                onChange={(e) => setNewServer({ ...newServer, SIAF1: e.target.value })}
+                placeholder="مثال: نظام التشغيل"
+                disabled={isSubmittingServer}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-bold text-muted-foreground uppercase">حقل إضافي 2</Label>
+              <Input
+                value={newServer.SIAF2}
+                onChange={(e) => setNewServer({ ...newServer, SIAF2: e.target.value })}
+                placeholder="مثال: الموقع الجغرافي"
+                disabled={isSubmittingServer}
               />
             </div>
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setIsAddModalOpen(false)} className="px-6">إلغاء</Button>
-            <Button onClick={handleAddServer} className="px-8 shadow-lg shadow-primary/20">حفظ الخادم</Button>
+            <Button 
+              variant="outline" 
+              onClick={() => setIsAddModalOpen(false)} 
+              className="px-6"
+              disabled={isSubmittingServer}
+            >
+              إلغاء
+            </Button>
+            <Button 
+              onClick={handleAddServer} 
+              className="px-8 shadow-lg shadow-primary/20"
+              disabled={isSubmittingServer}
+            >
+              {isSubmittingServer ? (
+                <>
+                  <Loader2 className="w-4 h-4 ml-2 animate-spin" />
+                  جاري الحفظ...
+                </>
+              ) : (
+                'حفظ الخادم'
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1084,6 +1415,51 @@ export default function ServersPage() {
           <DialogFooter className="gap-2 sm:gap-0">
             <Button variant="outline" onClick={() => setIsEditModalOpen(false)} className="px-6">إلغاء</Button>
             <Button onClick={handleEditServer} className="px-8 shadow-lg shadow-primary/20">تحديث البيانات</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Server Confirmation Dialog */}
+      <Dialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-destructive">تأكيد حذف الخادم</DialogTitle>
+            <DialogDescription>
+              هل أنت متأكد من رغبتك في حذف الخادم <span className="font-bold">{serverToDelete?.name}</span>؟
+            </DialogDescription>
+          </DialogHeader>
+          <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3 mb-4">
+            <p className="text-sm text-destructive">
+              ⚠️ تحذير: هذا الإجراء لا يمكن التراجع عنه. سيتم حذف جميع بيانات الخادم بشكل نهائي.
+            </p>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setIsDeleteConfirmOpen(false);
+                setServerToDelete(null);
+              }} 
+              className="px-6"
+              disabled={deletingServerId !== null}
+            >
+              إلغاء
+            </Button>
+            <Button 
+              variant="destructive"
+              onClick={handleConfirmDelete} 
+              className="px-8"
+              disabled={deletingServerId !== null}
+            >
+              {deletingServerId !== null ? (
+                <>
+                  <Loader2 className="w-4 h-4 ml-2 animate-spin" />
+                  جاري الحذف...
+                </>
+              ) : (
+                'حذف الخادم'
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -143,6 +143,74 @@ export async function getServers(): Promise<ServersResponse> {
   return response.json();
 }
 
+export interface AddServerRequest {
+  SISN?: string;        // رمز الخادم (Server Name/Code)
+  SITY?: string;        // نوع الخدمة (Server Type)
+  SIIP: string;         // عنوان IP (إجباري)
+  SIPO: number;         // المنفذ (Port - إجباري)
+  SIPT?: string;        // البروتوكول (HTTP, HTTPS, etc.)
+  SIST?: number;        // حالة الخدمة
+  DEFN?: number;        // السيرفر الافتراضي
+  SIRM?: string;        // SERVICE_RUN_MODE
+  SIRRW?: number;       // هل يتم Rewrite
+  SIRT?: string;        // نوع التوجيه
+  SIRP?: string;        // مسار التوجيه
+  SIMS?: number;        // الحد الأقصى للجلسات
+  SIAUY?: number;       // هل الخدمة تحتاج AUTH
+  SIAUT?: string;       // نوع المصادقة
+  SIAUC?: any;          // إعدادات المصادقة (JSON)
+  SIWE?: number;        // وزن السيرفر
+  SITMS?: number;       // مهلة الاتصال (ms)
+  SIMC?: number;        // الحد الأقصى للاتصالات المتزامنة
+  SIDE?: string;        // تفاصيل
+  SIAF1?: string;       // حقل إضافي 1
+  SIAF2?: string;       // حقل إضافي 2
+  [key: string]: any;
+}
+
+export interface AddServerResponse {
+  status: boolean;
+  message: string;
+  data?: {
+    SISEQ: number;
+    [key: string]: any;
+  };
+}
+
+export async function addServer(serverData: AddServerRequest, token?: string): Promise<AddServerResponse> {
+  const response = await fetch(`${BASE_URL}/ESAPI/SERVER/add`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token && { 'Authorization': `Bearer ${token}` })
+    },
+    body: JSON.stringify(serverData)
+  });
+  if (!response.ok) {
+    throw new Error("Failed to add server");
+  }
+  return response.json();
+}
+
+export interface DeleteServerResponse {
+  status: boolean;
+  message: string;
+}
+
+export async function deleteServer(serverId: number, token?: string): Promise<DeleteServerResponse> {
+  const response = await fetch(`${BASE_URL}/ESAPI/SERVER/delete/${serverId}`, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token && { 'Authorization': `Bearer ${token}` })
+    }
+  });
+  if (!response.ok) {
+    throw new Error("Failed to delete server");
+  }
+  return response.json();
+}
+
 // --- Customer Management ---
 
 export interface AddCustomerRequest {
