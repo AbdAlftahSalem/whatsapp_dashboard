@@ -63,16 +63,16 @@ interface ServerData {
   type: string;
   ip: string;
   port: number;
-  status: 'online' | 'offline' | 'restarting';
+  status: 'online' | 'offline' | 'restarting' | 'shutdown';
   serverType: string;
   maxSessions: number;
   activeSessions: number;
-  os: string;
-  uptime: string;
-  cpuUsage: number;
-  ramUsage: number;
-  ramTotal: number;
-  diskSpace: string;
+  os?: string | null;
+  uptime?: string | null;
+  cpuUsage?: number | null;
+  ramUsage?: number | null;
+  ramTotal?: number | null;
+  diskSpace?: string | null;
   lastCheck: string;
   location: string;
 }
@@ -115,33 +115,45 @@ export default function ServersPage() {
 
   const rawServers = data?.data?.servers || [];
   
-  const servers: ServerData[] = rawServers.map((s, index) => {
-    // Basic calculation for "jittered" live data
-    const baseCpu = [45, 72, 10, 58, 85][index % 5];
-    const baseRam = [8, 12, 2, 6, 14][index % 5];
-    const ramTotal = [16, 16, 8, 8, 16][index % 5];
+  const servers: ServerData[] = rawServers
+    .filter(Boolean)
+    .map((s: any, index: number) => {
+      // Prefer service-level entry when provided
+      const svc = Array.isArray(s.services) && s.services.length ? s.services[0] : s;
+      const health = svc?.health ?? s?.health ?? null;
 
-    return {
-      id: s.SISEQ,
-      name: s.SISN,
-      code: s.SIRM || `SVR-${s.SISEQ}`,
-      type: s.SITY || 'NORMAL',
-      ip: s.SIIP,
-      port: s.SIPO || 5021,
-      status: s.SIST === 1 ? 'online' : 'offline',
-      serverType: s.SITY || 'NORMAL',
-      maxSessions: s.SIMS || 100,
-      activeSessions: Math.floor((s.SIMS || 100) * ([0.4, 0.7, 0, 0.5, 0.9][index % 5])),
-      os: ['Ubuntu 22.04 LTS', 'Windows Server 2022', 'Debian 11', 'Ubuntu 20.04', 'CentOS 7'][index % 5],
-      uptime: ['45 يوم', '30 يوم', '-', '15 يوم', '120 يوم'][index % 5],
-      cpuUsage: Math.min(100, Math.max(0, baseCpu + jitter.cpu)),
-      ramUsage: Math.min(ramTotal, Math.max(0, baseRam + jitter.ram)),
-      ramTotal: ramTotal,
-      diskSpace: ['45% / 200GB', '70% / 500GB', '12% / 100GB', '55% / 250GB', '88% / 1TB'][index % 5],
-      lastCheck: new Date().toLocaleTimeString('ar-YE'),
-      location: ['الرياض', 'جدة', 'الدمام', 'الرياض', 'جدة'][index % 5],
-    };
-  });
+      // Determine status: if health is explicitly null -> shutdown, otherwise check SIST
+      const status = health === null ? 'shutdown' : ((svc?.SIST ?? s?.SIST) === 1 ? 'online' : 'offline');
+
+      // Use only API-provided metrics. If missing, keep null/undefined so UI can hide them.
+      const cpuPercent: number | null = typeof health?.cpuPercent === 'number' ? health.cpuPercent : null;
+      const ramUsed: number | null = typeof health?.memory?.usedGB === 'number' ? health.memory.usedGB : null;
+      const ramTotal: number | null = typeof health?.memory?.totalGB === 'number' ? health.memory.totalGB : null;
+      const readySessions: number = typeof health?.readySessions === 'number' ? health.readySessions : (typeof s?.readyCount === 'number' ? s.readyCount : (typeof s?.sessionCount === 'number' ? s.sessionCount : (svc?.SIMS ?? 0)));
+
+      const uptimeStr = typeof health?.uptime === 'number' ? `${health.uptime} s` : null;
+
+      return {
+        id: svc?.SISEQ ?? s?.SISEQ ?? index,
+        name: s?.SISN ?? svc?.SISN ?? `Server-${index}`,
+        code: svc?.SIRM ?? s?.SIRM ?? `SVR-${svc?.SISEQ ?? index}`,
+        type: svc?.SITY ?? s?.SITY ?? 'NORMAL',
+        ip: svc?.SIIP ?? s?.SIIP ?? '0.0.0.0',
+        port: svc?.SIPO ?? s?.SIPO ?? 5021,
+        status,
+        serverType: svc?.SITY ?? s?.SITY ?? 'NORMAL',
+        maxSessions: svc?.SIMS ?? s?.SIMS ?? 100,
+        activeSessions: readySessions,
+        os: svc?.SIAF1 ?? s?.SIAF1 ?? null,
+        uptime: uptimeStr,
+        cpuUsage: cpuPercent,
+        ramUsage: ramUsed,
+        ramTotal: ramTotal,
+        diskSpace: svc?.SIDE ?? s?.SIDE ?? null,
+        lastCheck: svc?.SILC ? new Date(svc.SILC).toLocaleTimeString('ar-YE') : (s?.SILC ? new Date(s.SILC).toLocaleTimeString('ar-YE') : ''),
+        location: svc?.SIAF2 ?? s?.SIAF2 ?? '',
+      };
+    });
 
   const filteredServers = servers.filter(
     (server) =>
@@ -207,6 +219,7 @@ export default function ServersPage() {
       case 'online': return <CheckCircle className="w-4 h-4 text-success" />;
       case 'offline': return <XCircle className="w-4 h-4 text-destructive" />;
       case 'restarting': return <RefreshCw className="w-4 h-4 text-warning animate-spin" />;
+      case 'shutdown': return <AlertTriangle className="w-4 h-4 text-destructive" />;
       default: return null;
     }
   };
@@ -216,6 +229,7 @@ export default function ServersPage() {
       case 'online': return 'متصل';
       case 'offline': return 'غير متصل';
       case 'restarting': return 'جاري الإعادة';
+      case 'shutdown': return 'مغلق';
       default: return status;
     }
   };
@@ -272,10 +286,6 @@ export default function ServersPage() {
           <div className="space-y-1">
             <h1 className="text-3xl lg:text-4xl font-black text-foreground tracking-tight flex items-center gap-4">
               إدارة الخوادم
-              <div className="flex items-center gap-2 px-2 py-1 rounded-full bg-success/10 border border-success/20 animate-pulse-subtle">
-                <div className="w-1.5 h-1.5 rounded-full bg-success shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
-                <span className="text-[9px] font-black text-success uppercase tracking-tighter">LIVE</span>
-              </div>
             </h1>
             <p className="text-sm text-muted-foreground font-medium max-w-2xl px-1">
               نظام المراقبة والتحكم المركزي بجميع موارد خوادم المنصة ومعالجة البيانات
@@ -324,7 +334,11 @@ export default function ServersPage() {
             <div className="space-y-1">
               <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">متوسط استهلاك المعالج</p>
               <h4 className="text-2xl font-black">
-                {Math.round(servers.reduce((acc, s) => acc + s.cpuUsage, 0) / (servers.length || 1))}%
+                {(() => {
+                  const sum = servers.reduce((acc, s) => (typeof s.cpuUsage === 'number' ? acc + s.cpuUsage : acc), 0);
+                  const count = servers.reduce((acc, s) => (typeof s.cpuUsage === 'number' ? acc + 1 : acc), 0);
+                  return `${count ? Math.round(sum / count) : 0}%`;
+                })()}
               </h4>
             </div>
             <div className="w-10 h-10 rounded-xl bg-destructive/10 flex items-center justify-center text-destructive">
@@ -384,7 +398,7 @@ export default function ServersPage() {
                   <div className={`p-2.5 rounded-xl transition-all duration-300 ${
                     server.status === 'online' 
                     ? 'bg-success/10 text-success shadow-[0_0_15px_rgba(34,197,94,0.1)]' 
-                    : 'bg-muted text-muted-foreground'
+                    : server.status === 'shutdown' ? 'bg-destructive/10 text-destructive shadow-[0_0_15px_rgba(239,68,68,0.06)]' : 'bg-muted text-muted-foreground'
                   }`}>
                     <Server className="w-5 h-5" />
                   </div>
@@ -397,7 +411,7 @@ export default function ServersPage() {
                     </h3>
                     <div className="flex items-center gap-1.5 mt-1">
                       <div className={`w-1.5 h-1.5 rounded-full ${
-                        server.status === 'online' ? 'bg-success animate-pulse' : 'bg-muted'
+                        server.status === 'online' ? 'bg-success animate-pulse' : server.status === 'shutdown' ? 'bg-destructive' : 'bg-muted'
                       }`} />
                       <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
                         {getStatusLabel(server.status)}
@@ -434,89 +448,99 @@ export default function ServersPage() {
 
             <div className="p-5 space-y-6">
               {/* Resources - Compact Rows */}
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">
-                    <div className="flex items-center gap-1.5">
-                      <Cpu className="w-3 h-3" />
-                      معالج النظام (CPU)
+              {server.status === 'online' && server.cpuUsage != null && server.ramUsage != null && server.ramTotal != null ? (
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">
+                      <div className="flex items-center gap-1.5">
+                        <Cpu className="w-3 h-3" />
+                        معالج النظام (CPU)
+                      </div>
+                      <span className={getResourceTextColor(server.cpuUsage)}>{Math.round(server.cpuUsage)}%</span>
                     </div>
-                    <span className={getResourceTextColor(server.cpuUsage)}>{Math.round(server.cpuUsage)}%</span>
-                  </div>
-                  <div className="resource-progress">
-                    <motion.div 
-                      initial={{ width: 0 }}
-                      animate={{ width: `${server.cpuUsage}%` }}
-                      className={`resource-progress-inner ${getResourceColor(server.cpuUsage)}`}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">
-                    <div className="flex items-center gap-1.5">
-                      <HardDrive className="w-3 h-3" />
-                      ذاكرة النظام (RAM)
+                    <div className="resource-progress">
+                      <motion.div 
+                        initial={{ width: 0 }}
+                        animate={{ width: `${server.cpuUsage}%` }}
+                        className={`resource-progress-inner ${getResourceColor(server.cpuUsage)}`}
+                      />
                     </div>
-                    <span className={getResourceTextColor((server.ramUsage / server.ramTotal) * 100)}>
-                      {Math.round((server.ramUsage / server.ramTotal) * 100)}%
-                    </span>
                   </div>
-                  <div className="resource-progress">
-                    <motion.div 
-                      initial={{ width: 0 }}
-                      animate={{ width: `${(server.ramUsage / server.ramTotal) * 100}%` }}
-                      className={`resource-progress-inner ${getResourceColor((server.ramUsage / server.ramTotal) * 100)}`}
-                    />
-                  </div>
-                  <div className="flex justify-between text-[9px] text-muted-foreground/60 font-mono mt-1">
-                    <span>{server.ramUsage.toFixed(1)} GB مستخدم</span>
-                    <span>{server.ramTotal} GB إجمالي</span>
-                  </div>
-                </div>
-              </div>
 
-              {/* Stats Grid - Cleaner icons & layout */}
-              <div className="grid grid-cols-2 gap-4 pb-2">
-                <div className="p-2.5 rounded-xl bg-muted/30 border border-border/20 group-hover:bg-muted/50 transition-colors">
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1.5 mb-1.5">
-                    <Database className="w-3 h-3 text-primary/70" />
-                    الجلسات
-                  </p>
-                  <p className="text-sm font-bold text-foreground">
-                    {server.activeSessions} <span className="text-[10px] text-muted-foreground font-normal">/ {server.maxSessions}</span>
-                  </p>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">
+                      <div className="flex items-center gap-1.5">
+                        <HardDrive className="w-3 h-3" />
+                        ذاكرة النظام (RAM)
+                      </div>
+                      <span className={getResourceTextColor((server.ramUsage / server.ramTotal) * 100)}>
+                        {Math.round((server.ramUsage / server.ramTotal) * 100)}%
+                      </span>
+                    </div>
+                    <div className="resource-progress">
+                      <motion.div 
+                        initial={{ width: 0 }}
+                        animate={{ width: `${(server.ramUsage / server.ramTotal) * 100}%` }}
+                        className={`resource-progress-inner ${getResourceColor((server.ramUsage / server.ramTotal) * 100)}`}
+                      />
+                    </div>
+                    <div className="flex justify-between text-[9px] text-muted-foreground/60 font-mono mt-1">
+                      <span>{server.ramUsage.toFixed(1)} GB مستخدم</span>
+                      <span>{server.ramTotal} GB إجمالي</span>
+                    </div>
+                  </div>
                 </div>
-                <div className="p-2.5 rounded-xl bg-muted/30 border border-border/20 group-hover:bg-muted/50 transition-colors">
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1.5 mb-1.5">
-                    <Activity className="w-3 h-3 text-primary/70" />
-                    المساحة
-                  </p>
-                  <p className="text-sm font-bold text-foreground">{server.diskSpace.split(' / ')[0]}</p>
+              ) : (
+                <div className="p-4 text-center rounded-md bg-muted/10 border border-border/30">
+                  <p className="text-sm font-bold text-muted-foreground">بيانات الأداء غير متوفرة — الخادم غير متصل أو غير متاح</p>
                 </div>
-              </div>
+              )}
 
-              {/* Technical Footer */}
-              <div className="pt-4 border-t border-border/40 flex items-center justify-between text-[10px]">
-                <div className="flex items-center gap-3 text-muted-foreground/70">
-                  <div className="flex items-center gap-1">
-                    <Clock className="w-3 h-3" />
-                    {server.uptime}
+              {/* Stats Grid - Cleaner icons & layout (only when online) */}
+              {server.status === 'online' && (
+                <div className="grid grid-cols-2 gap-4 pb-2">
+                  <div className="p-2.5 rounded-xl bg-muted/30 border border-border/20 group-hover:bg-muted/50 transition-colors">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1.5 mb-1.5">
+                      <Database className="w-3 h-3 text-primary/70" />
+                      الجلسات
+                    </p>
+                    <p className="text-sm font-bold text-foreground">
+                      {server.activeSessions} <span className="text-[10px] text-muted-foreground font-normal">/ {server.maxSessions}</span>
+                    </p>
                   </div>
-                  <div className="w-1 h-1 rounded-full bg-border" />
-                  <div className="flex items-center gap-1 font-mono">
-                    <RefreshCw className="w-3 h-3" />
-                    {server.lastCheck}
+                  <div className="p-2.5 rounded-xl bg-muted/30 border border-border/20 group-hover:bg-muted/50 transition-colors">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1.5 mb-1.5">
+                      <Activity className="w-3 h-3 text-primary/70" />
+                      المساحة
+                    </p>
+                    <p className="text-sm font-bold text-foreground">{server.diskSpace ? String(server.diskSpace).split(' / ')[0] : 'N/A'}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-1 font-mono text-muted-foreground/40 bg-muted/50 px-2 py-0.5 rounded border border-border/30">
-                  {server.code}
+              )}
+
+              {/* Technical Footer (only when online) */}
+              {server.status === 'online' && (
+                <div className="pt-4 border-t border-border/40 flex items-center justify-between text-[10px]">
+                  <div className="flex items-center gap-3 text-muted-foreground/70">
+                    <div className="flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      {server.uptime}
+                    </div>
+                    <div className="w-1 h-1 rounded-full bg-border" />
+                    <div className="flex items-center gap-1 font-mono">
+                      <RefreshCw className="w-3 h-3" />
+                      {server.lastCheck}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 font-mono text-muted-foreground/40 bg-muted/50 px-2 py-0.5 rounded border border-border/30">
+                    {server.code}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
 
             {/* High Usage Alert Overlay (SRV-002) */}
-            {(server.cpuUsage > 80 || (server.ramUsage / server.ramTotal) > 0.85) && (
+            {server.status === 'online' && (server.cpuUsage > 80 || (server.ramUsage / server.ramTotal) > 0.85) && (
               <div className="absolute top-0 left-0 w-full h-1 bg-destructive shadow-[0_2px_10px_rgba(239,68,68,0.4)] animate-pulse" />
             )}
           </motion.div>

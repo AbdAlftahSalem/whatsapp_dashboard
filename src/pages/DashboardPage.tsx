@@ -239,12 +239,11 @@ export default function DashboardPage() {
                         <div>
                           <h3 className="font-black text-xl tracking-tight text-foreground">{server.serverCode}</h3>
                           <div className="flex items-center gap-2">
-                             <span className="text-[10px] text-muted-foreground font-mono">{mainIp}</span>
-                             <div className="w-1 h-1 rounded-full bg-border" />
+                            <span className="text-[10px] text-muted-foreground font-mono">{mainIp}</span>
+                            <div className="w-1 h-1 rounded-full bg-border" />
                           </div>
                         </div>
                       </div>
-                      <StatusBadge status={server.subServers?.some(s => s.status === 'Active') ? 'active' : 'inactive'} />
                     </div>
 
                     <div className="space-y-6">
@@ -252,9 +251,9 @@ export default function DashboardPage() {
                         <div className="flex items-center justify-between text-xs font-bold">
                           <span className="text-muted-foreground uppercase tracking-widest">Total Sessions</span>
                           <div className="flex items-baseline gap-1">
-                             <span className="text-lg font-black">{server.totalConnectedSessions || 0}</span>
-                             <span className="text-muted-foreground/40">/</span>
-                             <span className="text-muted-foreground">{totalMaxSessions}</span>
+                            <span className="text-lg font-black">{server.totalConnectedSessions || 0}</span>
+                            <span className="text-muted-foreground/40">/</span>
+                            <span className="text-muted-foreground">{totalMaxSessions}</span>
                           </div>
                         </div>
                         <div className="w-full h-2 bg-muted rounded-full overflow-hidden p-[1px] border border-border/50">
@@ -269,28 +268,28 @@ export default function DashboardPage() {
                       {server.subServers && server.subServers.length > 0 && (
                         <div className="pt-5 border-t border-border/40 space-y-3">
                           <div className="flex items-center justify-between">
-                             <div className="flex items-center gap-2 text-[10px] font-black text-muted-foreground uppercase tracking-widest">
-                               <Activity className="w-3 h-3 text-primary/60" />
-                               Sub-Units ({server.subServers.length})
-                             </div>
-                             <div className="h-px flex-1 bg-border/30 mx-4" />
+                            <div className="flex items-center gap-2 text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                              <Activity className="w-3 h-3 text-primary/60" />
+                              Sub-Units ({server.subServers.length})
+                            </div>
+                            <div className="h-px flex-1 bg-border/30 mx-4" />
                           </div>
-                          
+
                           <div className="grid grid-cols-1 gap-2">
                             {server.subServers.map((sub, sIdx) => (
                               <div key={sIdx} className="flex items-center justify-between p-2.5 rounded-xl bg-background/40 hover:bg-background/80 transition-colors border border-border/40 group/sub">
                                 <div className="flex items-center gap-2.5">
                                   <div className={`w-2 h-2 rounded-full ${sub.status === 'Active' ? 'bg-success shadow-[0_0_8px_rgba(34,197,94,0.4)]' : 'bg-destructive'}`} />
                                   <div className="flex flex-col">
-                                     <span className="text-[11px] font-black text-foreground group-hover/sub:text-primary transition-colors">{sub.type}</span>
-                                     <span className="text-[9px] font-mono text-muted-foreground opacity-60">Port: {sub.port}</span>
+                                    <span className="text-[11px] font-black text-foreground group-hover/sub:text-primary transition-colors">{sub.type}</span>
+                                    <span className="text-[9px] font-mono text-muted-foreground opacity-60">Port: {sub.port}</span>
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-3">
-                                   <div className="flex flex-col items-end">
-                                      <span className="text-[9px] font-bold text-muted-foreground uppercase">Capacity</span>
-                                      <span className="text-xs font-black">{sub.maxSessions}</span>
-                                   </div>
+                                  <div className="flex flex-col items-end">
+                                    <span className="text-[9px] font-bold text-muted-foreground uppercase">Capacity</span>
+                                    <span className="text-xs font-black">{sub.maxSessions}</span>
+                                  </div>
                                 </div>
                               </div>
                             ))}
