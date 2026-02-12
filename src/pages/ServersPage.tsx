@@ -527,6 +527,7 @@ export default function ServersPage() {
                     <div className="flex items-center gap-1 text-[10px] uppercase font-black tracking-widest">RAM <ArrowUpDown className="w-3 h-3" /></div>
                   </th>
                   <th className="min-w-[140px]">نظام التشغيل</th>
+                  <th className="min-w-[140px]">الموقع والكود</th>
                   <th className="min-w-[140px]">آخر فحص</th>
                   <th className="min-w-[100px]">البروتوكول</th>
                   <th className="sticky left-0 z-10 bg-muted/50 text-[10px] uppercase font-black tracking-widest text-left" style={{ backgroundColor: "oklch(96.8% 0.007 247.896)" }}>
@@ -555,6 +556,7 @@ export default function ServersPage() {
                             <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-primary/10 text-primary uppercase font-bold tracking-tighter">
                               {server.type}
                             </span>
+                            <span className="text-[9px] font-bold text-muted-foreground/60 uppercase">{server.runMode}</span>
                           </div>
                         </div>
                       </div>
@@ -573,23 +575,57 @@ export default function ServersPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex flex-col gap-1 w-24">
-                        <div className="flex justify-between text-[9px] font-black uppercase">
-                          <span className="text-muted-foreground">CPU</span>
-                          <span className={getResourceTextColor(server.cpuUsage || 0)}>{Math.round(server.cpuUsage || 0)}%</span>
+                      <div className="flex items-center gap-4 w-44">
+                        <div className="flex flex-col gap-1 flex-1">
+                          <div className="flex justify-between text-[9px] font-black uppercase">
+                            <span className="text-muted-foreground">CPU</span>
+                            <span className={getResourceTextColor(server.cpuUsage || 0)}>{Math.round(server.cpuUsage || 0)}%</span>
+                          </div>
+                          <div className="resource-progress overflow-hidden h-1">
+                            <motion.div 
+                              initial={{ width: 0 }}
+                              animate={{ width: `${server.cpuUsage || 0}%` }}
+                              className={`resource-progress-inner h-full ${getResourceColor(server.cpuUsage || 0)}`}
+                            />
+                          </div>
                         </div>
-                        <Progress value={server.cpuUsage || 0} className="h-1 shadow-sm" />
+                        {server.status === 'online' && (
+                          <SparklineChart 
+                            data={server.history || []} 
+                            color={getResourceStrokeColor(server.cpuUsage || 0)} 
+                            dataKey="cpu" 
+                          />
+                        )}
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex flex-col gap-1 w-24">
-                        <div className="flex justify-between text-[9px] font-black uppercase">
-                          <span className="text-muted-foreground">RAM</span>
-                          <span className={getResourceTextColor((server.ramUsage || 0) / (server.ramTotal || 1) * 100)}>
-                            {Math.round((server.ramUsage || 0) / (server.ramTotal || 1) * 100)}%
-                          </span>
+                      <div className="flex items-center gap-4 w-44">
+                        <div className="flex flex-col gap-1 flex-1">
+                          <div className="flex justify-between text-[9px] font-black uppercase">
+                            <span className="text-muted-foreground">RAM</span>
+                            <span className={getResourceTextColor((server.ramUsage || 0) / (server.ramTotal || 1) * 100)}>
+                              {Math.round((server.ramUsage || 0) / (server.ramTotal || 1) * 100)}%
+                            </span>
+                          </div>
+                          <div className="resource-progress overflow-hidden h-1">
+                            <motion.div 
+                              initial={{ width: 0 }}
+                              animate={{ width: `${(server.ramUsage || 0) / (server.ramTotal || 1) * 100}%` }}
+                              className={`resource-progress-inner h-full ${getResourceColor((server.ramUsage || 0) / (server.ramTotal || 1) * 100)}`}
+                            />
+                          </div>
+                          <div className="flex justify-between text-[8px] text-muted-foreground/50 font-mono mt-0.5">
+                            <span>{(server.ramUsage || 0).toFixed(1)}GB</span>
+                            <span>/ {(server.ramTotal || 1)}GB</span>
+                          </div>
                         </div>
-                        <Progress value={(server.ramUsage || 0) / (server.ramTotal || 1) * 100} className="h-1 shadow-sm" />
+                        {server.status === 'online' && (
+                          <SparklineChart 
+                            data={server.history || []} 
+                            color={getResourceStrokeColor((server.ramUsage || 0) / (server.ramTotal || 1) * 100)} 
+                            dataKey="ram" 
+                          />
+                        )}
                       </div>
                     </td>
                     <td className="px-6 py-4">
@@ -597,6 +633,14 @@ export default function ServersPage() {
                         <span className="text-xs text-muted-foreground/80">{server.os || 'N/A'}</span>
                         <span className="text-[9px] text-muted-foreground/40 font-mono uppercase tracking-tighter">
                           {server.uptime || '0s uptime'}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-xs text-muted-foreground/80">{server.location || 'N/A'}</span>
+                        <span className="text-[9px] text-muted-foreground/40 font-mono uppercase tracking-tighter">
+                          {server.code}
                         </span>
                       </div>
                     </td>
