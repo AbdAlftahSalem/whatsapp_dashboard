@@ -1,186 +1,211 @@
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Building2,
   Plus,
-  Search,
-  MoreHorizontal,
-  Edit2,
-  Trash2,
   Phone,
   Mail,
-  Loader2,
-  XCircle,
   Calendar,
   Smartphone,
-  Filter,
-  ArrowUpDown,
-  ChevronDown,
   FileDown,
   ChevronLeft,
-  ChevronRight,
+  Edit2,
+  Trash2,
+  MoreHorizontal,
+  RefreshCw,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { StatusBadge } from '@/components/ui/StatusBadge';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Button } from '@/components/ui/button';
+import { DataTable } from '@/components/ui/DataTable';
+import { SearchFilterBar } from '@/components/ui/SearchFilterBar';
+import { PageLoader } from '@/components/ui/PageLoader';
+import { PageError } from '@/components/ui/PageError';
+import { StatsCard } from '@/components/ui/StatsCard';
+import { MobileCard, MobileCardStat } from '@/components/ui/MobileCard';
+import { Pagination } from '@/components/ui/Pagination';
+import { StatusBadge } from '@/components/ui/StatusBadge';
+import { StatusFilter } from '@/components/filters/StatusFilter';
+import { DateRangeFilter } from '@/components/filters/DateRangeFilter';
+import { RangeFilter } from '@/components/filters/RangeFilter';
+import { DeleteConfirmModal } from '@/components/ui/DeleteConfirmModal';
+import { CustomerEditModal } from '@/features/customers/components/CustomerEditModal';
+import { getCustomerColumns } from '@/features/customers/components/CustomerTableColumns';
+
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getCustomers, deleteCustomer, updateCustomer } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
 import { useToast } from '@/hooks/use-toast';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
+import { usePagination } from '@/hooks/usePagination';
+import { useSorting } from '@/hooks/useSorting';
+import { useFiltering } from '@/hooks/useFiltering';
+import { exportToCSV } from '@/lib/exportUtils';
 
 export default function CustomersPage() {
   const [searchQuery, setSearchQuery] = useState('');
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editData, setEditData] = useState({
-    name: '',
-    nameE: '', // CINE
-    detail: '',
-    email: '',
-    phone: '',
-    branch: '',
-    dlm: 0,
-    country: 'YE',
-    lan: 'ar',
-    system: '',
-    address: '',
-    cinu: 1,
-    status: 1, // CIST
-    cifd: '', // CIFD
-    citd: '', // CITD
-    af2: '',
-    af3: '',
-    af4: '',
-    af5: '',
-  });
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [customerToDelete, setCustomerToDelete] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Filter & Sort States
-  const [filters, setFilters] = useState({
+  const initialFilters = {
     status: 'all',
     dateFrom: '',
     dateTo: '',
     ciidFrom: '',
     ciidTo: '',
-  });
-  const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' }>({
-    key: 'CISEQ',
-    direction: 'desc'
-  });
-  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  };
 
-  // Pagination State
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
+  const [filters, setFilters] = useState(initialFilters);
 
   const { toast } = useToast();
   const { accessToken: token } = useAuthStore();
   const queryClient = useQueryClient();
 
-  const { data: customersData, isLoading, error } = useQuery({
+  const { data: customersData, isLoading, error, refetch } = useQuery({
     queryKey: ['customers'],
     queryFn: getCustomers,
   });
 
-  const handleEdit = (customer: any) => {
-    setSelectedCustomer(customer);
-    setEditData({
-      name: customer.CINA || '',
-      nameE: customer.CINE || '',
-      detail: customer.CIDE || '',
-      email: customer.CIEM || '',
-      phone: customer.CIPH1 || '',
-      branch: customer.CIAF1 || '',
-      dlm: customer.CIDLM || 0,
-      country: customer.CICO || 'YE',
-      lan: customer.CILAN || 'ar',
-      system: customer.CIAF10 || '',
-      address: customer.CIADD || '',
-      cinu: customer.CINU || 1,
-      status: customer.CIST || 1,
-      cifd: customer.CIFD ? customer.CIFD.split('T')[0] : '',
-      citd: customer.CITD ? customer.CITD.split('T')[0] : '',
-      af2: customer.CIAF2 || '',
-      af3: customer.CIAF3 || '',
-      af4: customer.CIAF4 || '',
-      af5: customer.CIAF5 || '',
-    });
-    setShowEditModal(true);
+  const customers = customersData?.data.customers || [];
+
+  // Filtering Logic
+  const filterFn = (customer: any, filters: any) => {
+    const searchLower = searchQuery.toLowerCase();
+    const matchesSearch = !searchQuery ||
+      (customer.CINA && customer.CINA.toLowerCase().includes(searchLower)) ||
+      (customer.CIPH1 && customer.CIPH1.includes(searchQuery)) ||
+      (customer.CIAF1 && customer.CIAF1.toLowerCase().includes(searchLower)) ||
+      (customer.CIID && customer.CIID.includes(searchQuery));
+
+    const matchesStatus = filters.status === 'all' ||
+      (filters.status === 'active' && customer.CIST === 1) ||
+      (filters.status === 'inactive' && customer.CIST !== 1);
+
+    const regDate = customer.DATEI ? new Date(customer.DATEI).getTime() : 0;
+    const matchesDateFrom = !filters.dateFrom || regDate >= new Date(filters.dateFrom).getTime();
+    const matchesDateTo = !filters.dateTo || regDate <= new Date(filters.dateTo).setHours(23, 59, 59, 999);
+
+    const ciid = parseInt(customer.CIID) || 0;
+    const fromCiid = parseInt(filters.ciidFrom) || 0;
+    const toCiid = parseInt(filters.ciidTo) || Infinity;
+    const matchesCiid = (!filters.ciidFrom || ciid >= fromCiid) && (!filters.ciidTo || ciid <= toCiid);
+
+    return matchesSearch && matchesStatus && matchesDateFrom && matchesDateTo && matchesCiid;
   };
 
-  const handleUpdate = async () => {
+  const filteredData = useFiltering({ data: customers, filters, filterFn });
+  
+  // Re-apply text search on top of useFiltering (since searchQuery is separate)
+  const searchingData = useMemo(() => {
+    if (!searchQuery) return filteredData;
+    const searchLower = searchQuery.toLowerCase();
+    return filteredData.filter(customer => 
+      (customer.CINA && customer.CINA.toLowerCase().includes(searchLower)) ||
+      (customer.CIPH1 && customer.CIPH1.includes(searchQuery)) ||
+      (customer.CIAF1 && customer.CIAF1.toLowerCase().includes(searchLower)) ||
+      (customer.CIID && customer.CIID.includes(searchQuery))
+    );
+  }, [filteredData, searchQuery]);
+
+  // Sorting
+  const { sortedData, sortConfig, onSort } = useSorting({ 
+    data: searchingData, 
+    initialSort: { key: 'CISEQ', direction: 'desc' } 
+  });
+
+  // Pagination
+  const { 
+    paginatedData, 
+    currentPage, 
+    pageSize, 
+    totalPages, 
+    goToPage, 
+    setPageSize: changePageSize 
+  } = usePagination({ data: sortedData, initialPageSize: 25 });
+
+  // Handlers
+  const handleEdit = (customer: any) => {
+    setSelectedCustomer(customer);
+    setIsEditModalOpen(true);
+  };
+
+  const resetFilters = () => {
+    setFilters(initialFilters);
+    setSearchQuery('');
+  };
+
+  // Check if any filter is active - Defined here to follow Rules of Hooks
+  const isFilterActive = useMemo(() => {
+    return searchQuery !== '' || 
+           filters.status !== 'all' || 
+           filters.dateFrom !== '' || 
+           filters.dateTo !== '' || 
+           filters.ciidFrom !== '' || 
+           filters.ciidTo !== '';
+  }, [searchQuery, filters]);
+
+  const handleUpdate = async (formData: any) => {
     if (!token || !selectedCustomer) return;
     setIsSubmitting(true);
     try {
       const updateData: any = {};
+      
+      // Mapping from formData names back to API names if needed
+      // Here CustomerEditModal already provides structured data but we need to compare
+      const mappings = [
+        { api: 'CINA', form: 'nameA' },
+        { api: 'CINE', form: 'nameE' },
+        { api: 'CIDE', form: 'detail' },
+        { api: 'CIPH1', form: 'phone' },
+        { api: 'CIEM', form: 'email' },
+        { api: 'CIADD', form: 'address' },
+        { api: 'CICO', form: 'country' },
+        { api: 'CILAN', form: 'lan' },
+        { api: 'CINU', form: 'cinu' },
+        { api: 'CIST', form: 'status' },
+        { api: 'CIFD', form: 'cifd', isDate: true },
+        { api: 'CITD', form: 'citd', isDate: true },
+        { api: 'CIDLM', form: 'dlm' },
+        { api: 'CIAF1', form: 'branch' },
+        { api: 'CIAF10', form: 'system' },
+        { api: 'CIAF2', form: 'af2' },
+        { api: 'CIAF3', form: 'af3' },
+        { api: 'CIAF4', form: 'af4' },
+        { api: 'CIAF5', form: 'af5' },
+      ];
 
-      // Helper function to add to updateData if value changed
-      const addIfChanged = (apiKey: string, newValue: any, originalValue: any, isDate = false) => {
-        let normalizedOriginal = originalValue === null || originalValue === undefined ? '' : originalValue;
-        let normalizedNew = newValue === null || newValue === undefined ? '' : newValue;
-
-        if (isDate && normalizedOriginal) {
-          normalizedOriginal = normalizedOriginal.split('T')[0];
+      mappings.forEach(m => {
+        let currentVal = selectedCustomer[m.api];
+        let newVal = formData[m.form];
+        
+        if (m.isDate && currentVal) {
+          currentVal = currentVal.split('T')[0];
         }
-
-        if (normalizedNew !== normalizedOriginal) {
-          updateData[apiKey] = newValue;
+        
+        if (newVal !== currentVal) {
+          updateData[m.api] = newVal;
         }
-      };
-
-      addIfChanged('CINA', editData.name, selectedCustomer.CINA);
-      addIfChanged('CINE', editData.nameE, selectedCustomer.CINE);
-      addIfChanged('CIDE', editData.detail, selectedCustomer.CIDE);
-      addIfChanged('CIPH1', editData.phone, selectedCustomer.CIPH1);
-      addIfChanged('CIEM', editData.email, selectedCustomer.CIEM);
-      addIfChanged('CIADD', editData.address, selectedCustomer.CIADD);
-      addIfChanged('CICO', editData.country, selectedCustomer.CICO);
-      addIfChanged('CILAN', editData.lan, selectedCustomer.CILAN);
-      addIfChanged('CINU', editData.cinu, selectedCustomer.CINU);
-      addIfChanged('CIST', editData.status, selectedCustomer.CIST);
-      addIfChanged('CIFD', editData.cifd, selectedCustomer.CIFD, true);
-      addIfChanged('CITD', editData.citd, selectedCustomer.CITD, true);
-      addIfChanged('CIDLM', editData.dlm, selectedCustomer.CIDLM);
-      addIfChanged('CIAF1', editData.branch, selectedCustomer.CIAF1);
-      addIfChanged('CIAF10', editData.system, selectedCustomer.CIAF10);
-      addIfChanged('CIAF2', editData.af2, selectedCustomer.CIAF2);
-      addIfChanged('CIAF3', editData.af3, selectedCustomer.CIAF3);
-      addIfChanged('CIAF4', editData.af4, selectedCustomer.CIAF4);
-      addIfChanged('CIAF5', editData.af5, selectedCustomer.CIAF5);
+      });
 
       if (Object.keys(updateData).length === 0) {
         toast({ title: 'تنبيه', description: 'لم يتم تغيير أي بيانات' });
-        setShowEditModal(false);
+        setIsEditModalOpen(false);
         return;
       }
 
       await updateCustomer(selectedCustomer.CIORG, updateData, token);
-
-      toast({
-        title: 'تم التحديث بنجاح',
-        description: 'تم تحديث بيانات العميل بنجاح',
-      });
-
-      setShowEditModal(false);
+      toast({ title: 'تم التحديث بنجاح', description: 'تم تحديث بيانات العميل بنجاح' });
+      setIsEditModalOpen(false);
       queryClient.invalidateQueries({ queryKey: ['customers'] });
     } catch (error) {
-      console.error('Update error:', error);
       toast({
         title: 'فشل التحديث',
         description: error instanceof Error ? error.message : 'حدث خطأ أثناء الاتصال بالسيرفر',
@@ -191,16 +216,18 @@ export default function CustomersPage() {
     }
   };
 
-  const handleDelete = async (org: string) => {
-    if (!token) return;
-    if (!confirm('هل أنت متأكد من حذف هذا العميل؟ سيتم حذف جميع الأجهزة المرتبطة به.')) return;
+  const handleDeleteConfirm = (org: string) => {
+    setCustomerToDelete(org);
+    setIsDeleteModalOpen(true);
+  };
 
+  const executeDelete = async () => {
+    if (!token || !customerToDelete) return;
+    setIsSubmitting(true);
     try {
-      await deleteCustomer(org, token);
-      toast({
-        title: 'تم الحذف بنجاح',
-        description: `تم حذف المنظمة ${org} بنجاح`,
-      });
+      await deleteCustomer(customerToDelete, token);
+      toast({ title: 'تم الحذف بنجاح', description: `تم حذف المنظمة ${customerToDelete} بنجاح` });
+      setIsDeleteModalOpen(false);
       queryClient.invalidateQueries({ queryKey: ['customers'] });
     } catch (error) {
       toast({
@@ -208,695 +235,194 @@ export default function CustomersPage() {
         description: error instanceof Error ? error.message : 'حدث خطأ غير متوقع',
         variant: 'destructive',
       });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const customers = customersData?.data.customers || [];
-
-  const handleSort = (key: string) => {
-    setSortConfig(prev => ({
-      key,
-      direction: prev.key === key && prev.direction === 'desc' ? 'asc' : 'desc'
-    }));
-  };
-
-  const applyQuickDate = (period: 'today' | 'week' | 'month') => {
-    const now = new Date();
-    let from = new Date();
-    if (period === 'today') from.setHours(0, 0, 0, 0);
-    else if (period === 'week') from.setDate(now.getDate() - 7);
-    else if (period === 'month') from.setMonth(now.getMonth() - 1);
-
-    setFilters(prev => ({
-      ...prev,
-      dateFrom: from.toISOString().split('T')[0],
-      dateTo: now.toISOString().split('T')[0]
-    }));
-  };
-
-  const filteredCustomers = customers.filter((customer) => {
-    // Text Search
-    const searchLower = searchQuery.toLowerCase();
-    const matchesSearch = !searchQuery ||
-      (customer.CINA && customer.CINA.toLowerCase().includes(searchLower)) ||
-      (customer.CIPH1 && customer.CIPH1.includes(searchQuery)) ||
-      (customer.CIAF1 && customer.CIAF1.toLowerCase().includes(searchLower)) ||
-      (customer.CIID && customer.CIID.includes(searchQuery));
-
-    // Status Filter
-    const matchesStatus = filters.status === 'all' ||
-      (filters.status === 'active' && customer.CIST === 1) ||
-      (filters.status === 'inactive' && customer.CIST !== 1);
-
-    // Date Filter (Registration Date - DATEI)
-    const regDate = customer.DATEI ? new Date(customer.DATEI).getTime() : 0;
-    const matchesDateFrom = !filters.dateFrom || regDate >= new Date(filters.dateFrom).getTime();
-    const matchesDateTo = !filters.dateTo || regDate <= new Date(filters.dateTo).setHours(23, 59, 59, 999);
-
-    // General Number Filter (CIID)
-    const ciid = parseInt(customer.CIID) || 0;
-    const fromCiid = parseInt(filters.ciidFrom) || 0;
-    const toCiid = parseInt(filters.ciidTo) || Infinity;
-    const matchesCiid = (!filters.ciidFrom || ciid >= fromCiid) && (!filters.ciidTo || ciid <= toCiid);
-
-    return matchesSearch && matchesStatus && matchesDateFrom && matchesDateTo && matchesCiid;
-  }).sort((a, b) => {
-    const { key, direction } = sortConfig;
-    let valA = a[key as keyof typeof a];
-    let valB = b[key as keyof typeof b];
-
-    if (valA === null || valA === undefined) valA = '' as any;
-    if (valB === null || valB === undefined) valB = '' as any;
-
-    if (valA < valB) return direction === 'asc' ? -1 : 1;
-    if (valA > valB) return direction === 'asc' ? 1 : -1;
-    return 0;
-  });
-
   const handleExport = () => {
-    if (filteredCustomers.length === 0) return;
-
-    const headers = [
-      "معرف العميل (SEQ)",
-      "الرقم العام (ID)",
-      "كود المنظمة (ORG)",
-      "الفرع (AF1)",
-      "اسم العميل",
-      "الاسم بالإنجليزي",
-      "الهاتف",
-      "الايميل",
-      "العنوان",
-      "المدير",
-      "اللغة",
-      "تاريخ الإضافة",
-      "تاريخ البداية",
-      "تاريخ النهاية",
-      "الحالة",
-      "عدد الأجهزة",
-      "حد الرسائل اليومي"
-    ];
-
-    const rows = filteredCustomers.map(c => [
-      c.CISEQ,
-      c.CIID || '',
-      c.CIORG,
-      c.CIAF1 || 'الرئيسي',
-      c.CINA || '',
-      c.CINE || '',
-      c.CIPH1 || '',
-      c.CIEM || '',
-      c.CIADD || '',
-      c.CIMAN || '',
-      c.CILAN === 'ar' ? 'العربية' : 'الإنجليزية',
-      c.DATEI ? new Date(c.DATEI).toLocaleDateString('ar-YE') : '',
-      c.CIFD ? new Date(c.CIFD).toLocaleDateString('ar-YE') : '',
-      c.CITD ? new Date(c.CITD).toLocaleDateString('ar-YE') : '',
-      c.CIST === 1 ? 'فعال' : 'موقوف',
-      c.CINU,
-      c.CIDLM
-    ]);
-
-    // Create CSV content with UTF-8 BOM for Excel compatibility
-    const csvContent = "\uFEFF" + [headers, ...rows]
-      .map(e => e.map(val => `"${String(val).replace(/"/g, '""')}"`).join(","))
-      .join("\n");
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", `تقرير_العملاء_${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-
-    toast({
-      title: "تم التصدير بنجاح",
-      description: "تم استخراج ملف إكسل (CSV) لبيانات العملاء بنجاح"
+    if (sortedData.length === 0) return;
+    
+    exportToCSV({
+      filename: `تقرير_العملاء_${new Date().toISOString().split('T')[0]}`,
+      headers: [
+        "معرف العميل (SEQ)", "الرقم العام (ID)", "كود المنظمة (ORG)", "الفرع (AF1)", 
+        "اسم العميل", "الهاتف", "تاريخ الإضافة", "تاريخ النهاية", "الحالة", 
+        "عدد الأجهزة", "حد الرسائل"
+      ],
+      data: sortedData.map(c => [
+        c.CISEQ, c.CIID || '', c.CIORG, c.CIAF1 || 'الرئيسي', 
+        c.CINA || '', c.CIPH1 || '', 
+        c.DATEI ? new Date(c.DATEI).toLocaleDateString('ar-YE') : '',
+        c.CITD ? new Date(c.CITD).toLocaleDateString('ar-YE') : '',
+        c.CIST === 1 ? 'فعال' : 'موقوف',
+        c.CINU, c.CIDLM
+      ])
     });
+
+    toast({ title: "تم التصدير بنجاح", description: "تم استخراج ملف CSV بنجاح" });
   };
 
-  const totalPages = Math.ceil(filteredCustomers.length / pageSize);
-  const paginatedCustomers = filteredCustomers.slice(
-    (currentPage - 1) * pageSize,
-    currentPage * pageSize
-  );
+  if (isLoading) return <PageLoader message="جاري تحميل بيانات العملاء..." />;
+  if (error) return <PageError onRetry={() => refetch()} />;
 
-  // Reset page when filters change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, filters]);
-
-  if (isLoading) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
-        <Loader2 className="w-8 h-8 text-primary animate-spin" />
-        <p className="text-muted-foreground animate-pulse">جاري تحميل بيانات العملاء...</p>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4 text-center">
-        <div className="w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
-          <XCircle className="w-6 h-6 text-destructive" />
-        </div>
-        <div>
-          <h3 className="text-lg font-semibold text-foreground">فشل تحميل بيانات العملاء</h3>
-          <p className="text-sm text-muted-foreground mt-1">يرجى التحقق من اتصالك بالخادم والمحاولة مرة أخرى</p>
-        </div>
-      </div>
-    );
-  }
+  const columns = getCustomerColumns(handleEdit, handleDeleteConfirm);
 
   return (
-    <div className="space-y-4 lg:space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl lg:text-2xl font-bold text-foreground">العملاء</h1>
-          <p className="text-sm text-muted-foreground mt-1">إدارة المنظمات والاشتراكات</p>
+    <div className="space-y-6 max-w-[1600px] mx-auto">
+      {/* Premium Header */}
+      <div className="relative space-y-4">
+        <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-muted-foreground/60 font-bold">
+          <span>الرئيسية</span>
+          <ChevronLeft className="w-3 h-3" />
+          <span className="text-primary">العملاء</span>
         </div>
-        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-          <Button variant="outline" className="gap-2" onClick={handleExport}>
-            <FileDown className="w-4 h-4" />
-            تصدير
-          </Button>
-          <Link to="/dashboard/customers/add" className="w-full sm:w-auto">
-            <Button className="gap-2 w-full">
-              <Plus className="w-4 h-4" />
-              إضافة عميل
-            </Button>
-          </Link>
-        </div>
-      </div>
-
-      {/* Search & Advanced Filters */}
-      <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-          <div className="relative flex-1">
-            <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="البحث بالاسم، الهاتف، الفرع أو الرقم العام..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pr-10"
-            />
-          </div>
-          <Button
-            variant={showAdvancedFilters ? "default" : "outline"}
-            className="gap-2"
-            onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-          >
-            <Filter className="w-4 h-4" />
-            تصفية متقدمة
-          </Button>
-        </div>
-
-        {showAdvancedFilters && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4 bg-card border rounded-xl"
-          >
-            {/* Status Filter */}
-            <div className="space-y-2">
-              <Label>الحالة</Label>
-              <select
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
-                value={filters.status}
-                onChange={(e) => {
-                  setFilters(prev => ({ ...prev, status: e.target.value }));
-                  setCurrentPage(1);
-                }}
-              >
-                <option value="all">الكل</option>
-                <option value="active">فعال</option>
-                <option value="inactive">موقوف</option>
-              </select>
-            </div>
-
-            {/* General Number Range */}
-            <div className="space-y-2">
-              <Label>الرقم العام (CIID)</Label>
-              <div className="flex items-center gap-2">
-                <Input
-                  placeholder="من"
-                  value={filters.ciidFrom}
-                  onChange={(e) => {
-                    setFilters(prev => ({ ...prev, ciidFrom: e.target.value }));
-                    setCurrentPage(1);
-                  }}
-                />
-                <Input
-                  placeholder="إلى"
-                  value={filters.ciidTo}
-                  onChange={(e) => {
-                    setFilters(prev => ({ ...prev, ciidTo: e.target.value }));
-                    setCurrentPage(1);
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* Date Filter */}
-            <div className="space-y-2 lg:col-span-2">
-              <div className="flex items-center justify-between">
-                <Label>تاريخ الإضافة</Label>
-                <div className="flex items-center gap-1">
-                  <Button variant="ghost" size="sm" onClick={() => { applyQuickDate('today'); setCurrentPage(1); }} className="text-[10px] h-6">اليوم</Button>
-                  <Button variant="ghost" size="sm" onClick={() => { applyQuickDate('week'); setCurrentPage(1); }} className="text-[10px] h-6">أسبوع</Button>
-                  <Button variant="ghost" size="sm" onClick={() => { applyQuickDate('month'); setCurrentPage(1); }} className="text-[10px] h-6">شهر</Button>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Input
-                  type="date"
-                  value={filters.dateFrom}
-                  onChange={(e) => {
-                    setFilters(prev => ({ ...prev, dateFrom: e.target.value }));
-                    setCurrentPage(1);
-                  }}
-                />
-                <Input
-                  type="date"
-                  value={filters.dateTo}
-                  onChange={(e) => {
-                    setFilters(prev => ({ ...prev, dateTo: e.target.value }));
-                    setCurrentPage(1);
-                  }}
-                />
-              </div>
-            </div>
-
-            <div className="lg:col-span-4 flex justify-between items-center border-t pt-4">
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-2 text-primary"
-                onClick={handleExport}
-              >
-                <FileDown className="w-4 h-4" />
-                تصدير البيانات (CSV)
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setFilters({ status: 'all', dateFrom: '', dateTo: '', ciidFrom: '', ciidTo: '' });
-                  setSearchQuery('');
-                  setCurrentPage(1);
-                }}
-              >
-                إعادة ضبط التصفية
-              </Button>
-            </div>
-          </motion.div>
-        )}
-      </div>
-
-      {/* Desktop Table */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="data-table"
-      >
-        <div className="overflow-x-auto">
-          <table className="w-full whitespace-nowrap">
-            <thead>
-              <tr>
-                <th className="min-w-[80px] cursor-pointer hover:bg-muted" onClick={() => handleSort('CISEQ')}>
-                  <div className="flex items-center gap-1">معرف العميل <ArrowUpDown className="w-3 h-3" /></div>
-                </th>
-                <th className="min-w-[120px] cursor-pointer hover:bg-muted" onClick={() => handleSort('CIID')}>
-                  <div className="flex items-center gap-1">الرقم العام <ArrowUpDown className="w-3 h-3" /></div>
-                </th>
-                <th className="min-w-[100px] cursor-pointer hover:bg-muted" onClick={() => handleSort('CIAF1')}>
-                  <div className="flex items-center gap-1">الفرع <ArrowUpDown className="w-3 h-3" /></div>
-                </th>
-                <th className="min-w-[180px] cursor-pointer hover:bg-muted" onClick={() => handleSort('CINA')}>
-                  <div className="flex items-center gap-1">اسم العميل <ArrowUpDown className="w-3 h-3" /></div>
-                </th>
-                <th className="min-w-[120px]">رقم الهاتف</th>
-                <th className="min-w-[120px] cursor-pointer hover:bg-muted" onClick={() => handleSort('DATEI')}>
-                  <div className="flex items-center gap-1">تاريخ الإضافة <ArrowUpDown className="w-3 h-3" /></div>
-                </th>
-                <th className="min-w-[150px] cursor-pointer hover:bg-muted" onClick={() => handleSort('CIST')}>
-                  <div className="flex items-center gap-1">الحالة <ArrowUpDown className="w-3 h-3" /></div>
-                </th>
-                <th className="min-w-[200px]">تاريخ التفعيل (من - إلى)</th>
-                <th className="min-w-[100px] cursor-pointer hover:bg-muted" onClick={() => handleSort('CINU')}>
-                  <div className="flex items-center gap-1">الأجهزة <ArrowUpDown className="w-3 h-3" /></div>
-                </th>
-                <th className="min-w-[100px]">حد الرسائل</th>
-                <th className="min-w-[100px]">الجلسات الفعالة</th>
-                <th className="min-w-[100px]">الرسائل المرسلة</th>
-                <th className="min-w-[140px]">تاريخ آخر رسالة</th>
-                <th className="min-w-[140px]">النظام والاصدار</th>
-                <th className="min-w-[120px]">المسؤول</th>
-                <th className="min-w-[120px]">CIORG</th>
-                <th className="sticky left-0 bg-muted/50" style={{ backgroundColor: 'oklch(96.8% 0.007 247.896)' }}>الإجراءات</th>
-              </tr>
-            </thead>
-            <tbody>
-              {paginatedCustomers.map((customer, index) => (
-                <motion.tr
-                  key={customer.CISEQ}
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                >
-                  <td className="font-mono text-xs">{customer.CISEQ}</td>
-                  <td className="font-mono text-xs">{customer.CIID || '-'}</td>
-                  <td>{customer.CIAF1 || 'الرئيسي'}</td>
-                  <td>
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                        <Building2 className="w-4 h-4 text-primary" />
-                      </div>
-                      <p className="font-medium text-foreground">{customer.CINA || customer.CINE || 'بدون اسم'}</p>
-                    </div>
-                  </td>
-                  <td dir="ltr">{customer.CIPH1 || '-'}</td>
-                  <td className="text-xs">
-                    {customer.DATEI ? new Date(customer.DATEI).toLocaleDateString('ar-YE') : '-'}
-                  </td>
-                  <td>
-                    <div className="flex flex-col gap-1">
-                      <StatusBadge status={customer.CIST === 1 ? 'active' : 'inactive'} />
-                      {customer.CIST !== 1 && customer.RES && (
-                        <span className="text-[10px] text-destructive truncate max-w-[120px]" title={customer.RES}>
-                          {customer.RES}
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  <td>
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground bg-muted/30 px-2 py-1 rounded-md">
-                      <Calendar className="w-3 h-3" />
-                      <span>{customer.CIFD ? new Date(customer.CIFD).toLocaleDateString('ar-YE') : '?'}</span>
-                      <span className="mx-1">→</span>
-                      <span>{customer.CITD ? new Date(customer.CITD).toLocaleDateString('ar-YE') : '?'}</span>
-                    </div>
-                  </td>
-                  <td>
-                    <span className="inline-flex items-center px-2 py-1 rounded-lg bg-muted text-xs font-medium">
-                      {customer.CINU}
-                    </span>
-                  </td>
-                  <td>
-                    <span className="text-xs font-medium">{customer.CIDLM}</span>
-                  </td>
-                  <td>
-                    <span className="text-xs font-medium text-success">{customer.numberReadySessions || 0}</span>
-                  </td>
-                  <td>
-                    <span className="text-xs font-medium">{customer.CIAF8 || 0}</span>
-                  </td>
-                  <td className="text-[10px]">
-                    {customer.CIAF9 ? new Date(customer.CIAF9).toLocaleString('ar-YE') : '-'}
-                  </td>
-                  <td className="text-xs">{customer.CIAF10 || customer.DEVI || '-'}</td>
-                  <td className="text-xs">{customer.CIMAN || '-'}</td>
-                  <td className="font-mono text-[10px] text-muted-foreground">{customer.CIORG}</td>
-                  <td className="sticky left-0 bg-background/95 backdrop-blur-sm border-r">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <MoreHorizontal className="w-4 h-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-48">
-                        <DropdownMenuItem
-                          className="gap-2"
-                          onClick={() => handleEdit(customer)}
-                        >
-                          <Edit2 className="w-4 h-4" />
-                          تعديل
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="gap-2"
-                          asChild
-                        >
-                          <Link to={`/dashboard/users?org=${customer.CIORG}`}>
-                            <Smartphone className="w-4 h-4" />
-                            عرض الجلسات
-                          </Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="gap-2 text-destructive"
-                          onClick={() => handleDelete(customer.CIORG)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                          حذف
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </td>
-                </motion.tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {filteredCustomers.length === 0 && (
-          <div className="p-12 text-center">
-            <Building2 className="w-12 h-12 mx-auto text-muted-foreground/50 mb-4" />
-            <h3 className="text-lg font-medium text-foreground">لا يوجد عملاء</h3>
-            <p className="text-muted-foreground mt-1">
-              {searchQuery ? 'لا توجد نتائج تطابق بحثك' : 'ابدأ بإضافة أول عميل للنظام'}
+        
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div className="space-y-1">
+            <h1 className="text-3xl lg:text-4xl font-black text-foreground tracking-tight flex items-center gap-4">
+              إدارة العملاء
+            </h1>
+            <p className="text-sm text-muted-foreground font-medium max-w-2xl px-1">
+              إدارة المنظمات والاشتراكات وتخصيص حدود الرسائل والأجهزة لكل عميل
             </p>
           </div>
-        )}
-      </motion.div>
+          
+          <div className="flex items-center gap-3">
+            <Button variant="outline" className="h-11 px-5 rounded-xl border-border/60" onClick={handleExport}>
+              <FileDown className="w-4 h-4 ml-2" />
+              تصدير
+            </Button>
+            <Link to="/dashboard/customers/add">
+              <Button className="h-11 px-6 rounded-xl shadow-xl shadow-primary/20 hover:scale-[1.02] transition-all">
+                <Plus className="w-4 h-4 ml-2" />
+                إضافة عميل
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </div>
 
-      {/* Edit Customer Modal */}
-      <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
-        <DialogContent className="sm:max-w-2xl text-right overflow-y-auto max-h-[90vh]" dir="rtl">
-          <DialogHeader>
-            <DialogTitle className="text-right flex items-center gap-2">
-              <Edit2 className="w-5 h-5 text-primary" />
-              تعديل بيانات المنظمة
-            </DialogTitle>
-            <DialogDescription className="text-right">
-              الرقم العام: {selectedCustomer?.CIID} | المعرف التقني: {selectedCustomer?.CIORG}
-            </DialogDescription>
-          </DialogHeader>
+      {/* Stats Overview */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatsCard 
+          title="إجمالي العملاء" 
+          value={customers.length} 
+          icon={Building2} 
+          variant="primary" 
+        />
+        <StatsCard 
+          title="العملاء النشطون" 
+          value={customers.filter(c => c.CIST === 1).length} 
+          icon={Building2} 
+          variant="success" 
+        />
+        <StatsCard 
+          title="إجمالي الأجهزة" 
+          value={customers.reduce((acc, c) => acc + (c.CINU || 0), 0)} 
+          icon={Smartphone} 
+          variant="warning" 
+        />
+        <StatsCard 
+          title="الجلسات المتصلة" 
+          value={customers.reduce((acc, c) => acc + (c.CIAF7 || 0), 0)} 
+          icon={Smartphone} 
+          variant="primary" 
+        />
+      </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
-            {/* Basic Info */}
-            <div className="space-y-4 md:col-span-2 border-b pb-4">
-              <h4 className="font-semibold text-sm text-primary">البيانات الأساسية</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2 text-right">
-                  <Label htmlFor="edit-name">اسم المنظمة</Label>
-                  <Input
-                    id="edit-name"
-                    value={editData.name}
-                    onChange={(e) => setEditData({ ...editData, name: e.target.value })}
-                    required
-                  />
-                </div>
-                <div className="space-y-2 text-right">
-                  <Label htmlFor="edit-nameE">الاسم بالإنجليزي (CINE)</Label>
-                  <Input
-                    id="edit-nameE"
-                    value={editData.nameE}
-                    onChange={(e) => setEditData({ ...editData, nameE: e.target.value })}
-                    dir="ltr"
-                  />
-                </div>
-                <div className="space-y-2 text-right">
-                  <Label htmlFor="edit-status">الحالة (CIST)</Label>
-                  <select
-                    id="edit-status"
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    value={editData.status}
-                    onChange={(e) => setEditData({ ...editData, status: parseInt(e.target.value) })}
-                  >
-                    <option value={1}>فعال</option>
-                    <option value={2}>موقوف</option>
-                  </select>
-                </div>
-                <div className="space-y-2 text-right">
-                  <Label htmlFor="edit-detail">التفاصيل / الملاحظات</Label>
-                  <Input
-                    id="edit-detail"
-                    value={editData.detail}
-                    onChange={(e) => setEditData({ ...editData, detail: e.target.value })}
-                  />
-                </div>
-              </div>
+      {/* Search & Filters */}
+      <SearchFilterBar
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        showAdvancedFilters={showAdvancedFilters}
+        setShowAdvancedFilters={setShowAdvancedFilters}
+        searchPlaceholder="البحث بالاسم، الهاتف، الفرع أو الرقم العام..."
+      >
+        <div className="space-y-4 p-4 lg:p-6 bg-card/40 backdrop-blur-xl border border-primary/5 rounded-2xl mt-4 shadow-2xl shadow-black/5 animate-in slide-in-from-top-2 duration-300">
+          <div className="flex items-center justify-between mb-6 pb-4 border-b border-primary/10">
+            <div className="space-y-1">
+              <h3 className="text-base font-black text-foreground flex items-center gap-2">
+                <Smartphone className="w-5 h-5 text-primary" />
+                خيارات التصفية المتقدمة
+              </h3>
+              <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">قم بتخصيص عرض البيانات بناءً على معايير محددة</p>
             </div>
-
-            {/* Contact Info */}
-            <div className="space-y-4 border-b md:border-b-0 pb-4 md:pb-0">
-              <h4 className="font-semibold text-sm text-primary">الاتصال والموقع</h4>
-              <div className="space-y-2 text-right">
-                <Label htmlFor="edit-email">البريد الإلكتروني</Label>
-                <Input
-                  id="edit-email"
-                  type="email"
-                  value={editData.email}
-                  onChange={(e) => setEditData({ ...editData, email: e.target.value })}
-                  dir="ltr"
-                />
-              </div>
-              <div className="space-y-2 text-right">
-                <Label htmlFor="edit-phone">رقم الهاتف</Label>
-                <Input
-                  id="edit-phone"
-                  value={editData.phone}
-                  onChange={(e) => setEditData({ ...editData, phone: e.target.value })}
-                  dir="ltr"
-                />
-              </div>
-              <div className="space-y-2 text-right">
-                <Label htmlFor="edit-address">العنوان</Label>
-                <Input
-                  id="edit-address"
-                  value={editData.address}
-                  onChange={(e) => setEditData({ ...editData, address: e.target.value })}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-2 text-right">
-                  <Label htmlFor="edit-country">الدولة</Label>
-                  <Input
-                    id="edit-country"
-                    value={editData.country}
-                    onChange={(e) => setEditData({ ...editData, country: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2 text-right">
-                  <Label htmlFor="edit-lan">اللغة</Label>
-                  <select
-                    id="edit-lan"
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    value={editData.lan}
-                    onChange={(e) => setEditData({ ...editData, lan: e.target.value })}
-                  >
-                    <option value="ar">العربية</option>
-                    <option value="en">الإنجليزية</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            {/* System Info */}
-            <div className="space-y-4">
-              <h4 className="font-semibold text-sm text-primary">إعدادات النظام</h4>
-              <div className="space-y-2 text-right">
-                <Label htmlFor="edit-branch">الفرع (AF1)</Label>
-                <Input
-                  id="edit-branch"
-                  value={editData.branch}
-                  onChange={(e) => setEditData({ ...editData, branch: e.target.value })}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-2 text-right">
-                  <Label htmlFor="edit-dlm">حد الرسائل اليومي</Label>
-                  <Input
-                    id="edit-dlm"
-                    type="number"
-                    value={editData.dlm}
-                    onChange={(e) => setEditData({ ...editData, dlm: parseInt(e.target.value) || 0 })}
-                  />
-                </div>
-                <div className="space-y-2 text-right">
-                  <Label htmlFor="edit-cinu">الأجهزة المصرحة</Label>
-                  <Input
-                    id="edit-cinu"
-                    type="number"
-                    min="1"
-                    value={editData.cinu}
-                    onChange={(e) => setEditData({ ...editData, cinu: parseInt(e.target.value) || 1 })}
-                  />
-                </div>
-              </div>
-              <div className="space-y-2 text-right">
-                <Label htmlFor="edit-system">النظام (AF10)</Label>
-                <Input
-                  id="edit-system"
-                  value={editData.system}
-                  onChange={(e) => setEditData({ ...editData, system: e.target.value })}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-2 text-right">
-                  <Label htmlFor="edit-cifd">تاريخ البداية (CIFD)</Label>
-                  <Input
-                    id="edit-cifd"
-                    type="date"
-                    value={editData.cifd}
-                    onChange={(e) => setEditData({ ...editData, cifd: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2 text-right">
-                  <Label htmlFor="edit-citd">تاريخ النهاية (CITD)</Label>
-                  <Input
-                    id="edit-citd"
-                    type="date"
-                    value={editData.citd}
-                    onChange={(e) => setEditData({ ...editData, citd: e.target.value })}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Extra Fields */}
-            <div className="space-y-4 md:col-span-2 border-t pt-4">
-              <h4 className="font-semibold text-sm text-muted-foreground">حقول إضافية</h4>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                <Input placeholder="حقل 2" value={editData.af2} onChange={e => setEditData({ ...editData, af2: e.target.value })} />
-                <Input placeholder="حقل 3" value={editData.af3} onChange={e => setEditData({ ...editData, af3: e.target.value })} />
-                <Input placeholder="حقل 4" value={editData.af4} onChange={e => setEditData({ ...editData, af4: e.target.value })} />
-                <Input placeholder="حقل 5" value={editData.af5} onChange={e => setEditData({ ...editData, af5: e.target.value })} />
-              </div>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={resetFilters}
+              className="h-9 px-4 text-[11px] font-bold text-destructive hover:bg-destructive/5 hover:border-destructive/30 border-destructive/10 rounded-xl flex items-center gap-2 transition-all active:scale-95 shadow-sm"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              تصفير كافة الفلاتر
+            </Button>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <StatusFilter 
+              value={filters.status} 
+              onChange={(v) => setFilters(prev => ({ ...prev, status: v }))} 
+              label="الحالة"
+              options={[
+                { label: 'الكل', value: 'all' },
+                { label: 'فعال', value: 'active' },
+                { label: 'موقوف', value: 'inactive' },
+              ]}
+            />
+            <RangeFilter 
+              label="الرقم العام (CIID)"
+              from={filters.ciidFrom}
+              to={filters.ciidTo}
+              onFromChange={(v) => setFilters(prev => ({ ...prev, ciidFrom: v }))}
+              onToChange={(v) => setFilters(prev => ({ ...prev, ciidTo: v }))}
+            />
+            <div className="lg:col-span-2">
+              <DateRangeFilter 
+                label="تاريخ الإضافة"
+                dateFrom={filters.dateFrom}
+                dateTo={filters.dateTo}
+                onDateFromChange={(v) => setFilters(prev => ({ ...prev, dateFrom: v }))}
+                onDateToChange={(v) => setFilters(prev => ({ ...prev, dateTo: v }))}
+                onQuickSelect={(period) => {
+                  const now = new Date();
+                  let from = new Date();
+                  if (period === 'today') from.setHours(0, 0, 0, 0);
+                  else if (period === 'week') from.setDate(now.getDate() - 7);
+                  else if (period === 'month') from.setMonth(now.getMonth() - 1);
+                  setFilters(prev => ({
+                    ...prev,
+                    dateFrom: from.toISOString().split('T')[0],
+                    dateTo: now.toISOString().split('T')[0]
+                  }));
+                }}
+              />
             </div>
           </div>
+        </div>
+      </SearchFilterBar>
 
-          <DialogFooter className="gap-2 sm:justify-start pt-4 border-t">
-            <Button variant="outline" onClick={() => setShowEditModal(false)}>
-              إلغاء
-            </Button>
-            <Button onClick={handleUpdate} disabled={isSubmitting} className="min-w-[120px]">
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="w-4 h-4 ml-2 animate-spin" />
-                  جاري الحفظ...
-                </>
-              ) : (
-                'حفظ التغييرات'
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Desktop Table View */}
+      <div className="hidden lg:block overflow-hidden rounded-2xl border bg-card/50 backdrop-blur-sm shadow-xl shadow-black/5">
+        <DataTable
+          data={paginatedData}
+          columns={columns}
+          onSort={onSort}
+          sortConfig={sortConfig}
+          keyExtractor={(item) => item.CISEQ}
+        />
+      </div>
 
-      {/* Mobile Cards */}
+      {/* Mobile Card View */}
       <div className="lg:hidden space-y-3">
-        {filteredCustomers.map((customer, index) => (
-          <motion.div
+        {paginatedData.map((customer, index) => (
+          <MobileCard
             key={customer.CISEQ}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.05 }}
-            className="bg-card rounded-xl border border-border p-4 space-y-3"
-          >
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <Building2 className="w-5 h-5 text-primary" />
-                </div>
-                <div>
-                  <p className="font-medium text-foreground">{customer.CINA || customer.CINE || 'بدون اسم'}</p>
-                  <p className="text-xs text-muted-foreground">{customer.CIORG}</p>
-                </div>
-              </div>
+            delay={index * 0.05}
+            title={customer.CINA || customer.CINE || 'بدون اسم'}
+            subtitle={customer.CIORG}
+            icon={<Building2 className="w-5 h-5 text-primary" />}
+            actions={
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -904,127 +430,91 @@ export default function CustomersPage() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-40">
-                  <DropdownMenuItem
-                    className="gap-2"
-                    onClick={() => handleEdit(customer)}
-                  >
-                    <Edit2 className="w-4 h-4" />
-                    تعديل
+                  <DropdownMenuItem className="gap-2" onClick={() => handleEdit(customer)}>
+                    <Edit2 className="w-4 h-4" /> تعديل
                   </DropdownMenuItem>
-                  <DropdownMenuItem className="gap-2 text-destructive">
-                    <Trash2 className="w-4 h-4" />
-                    حذف
+                  <DropdownMenuItem className="gap-2 text-destructive" onClick={() => handleDeleteConfirm(customer.CIORG)}>
+                    <Trash2 className="w-4 h-4" /> حذف
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-            </div>
-
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Mail className="w-3 h-3" />
-                <span dir="ltr" className="truncate">{customer.CIEM || '-'}</span>
-              </div>
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Phone className="w-3 h-3" />
-                <span dir="ltr">{customer.CIPH1 || '-'}</span>
-              </div>
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Smartphone className="w-3 h-3" />
-                <span>{customer.CINU} أجهزة</span>
-              </div>
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Calendar className="w-3 h-3" />
-                <span>ينتهي: {customer.CITD ? new Date(customer.CITD).toLocaleDateString('ar-YE') : '-'}</span>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-border">
-              <div className="flex flex-col gap-1">
+            }
+            details={
+              <>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Mail className="w-3 h-3" />
+                  <span dir="ltr" className="truncate">{customer.CIEM || '-'}</span>
+                </div>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Phone className="w-3 h-3" />
+                  <span dir="ltr">{customer.CIPH1 || '-'}</span>
+                </div>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Smartphone className="w-3 h-3" />
+                  <span>{customer.CINU} أجهزة</span>
+                </div>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Calendar className="w-3 h-3" />
+                  <span>ينتهي: {customer.CITD ? new Date(customer.CITD).toLocaleDateString('ar-YE') : '-'}</span>
+                </div>
+              </>
+            }
+            footer={
+              <>
                 <p className="text-[10px] text-muted-foreground">الرقم العام: {customer.CIID || '-'}</p>
                 <p className="text-[10px] text-muted-foreground">الفرع: {customer.CIAF1 || 'الرئيسي'}</p>
-              </div>
+              </>
+            }
+            status={
               <div className="flex flex-col items-end gap-1">
                 <StatusBadge status={customer.CIST === 1 ? 'active' : 'inactive'} />
                 {customer.CIST !== 1 && customer.RES && (
                   <span className="text-[9px] text-destructive">{customer.RES}</span>
                 )}
               </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-2 pt-2 text-[10px] text-center border-t border-border">
-              <div className="bg-muted px-1 py-1 rounded">
-                <p className="text-muted-foreground">نشطة</p>
-                <p className="font-bold">{customer.CIAF7 || 0}</p>
-              </div>
-              <div className="bg-muted px-1 py-1 rounded">
-                <p className="text-muted-foreground">رسائل</p>
-                <p className="font-bold">{customer.CIAF8 || 0}</p>
-              </div>
-              <div className="bg-muted px-1 py-1 rounded">
-                <p className="text-muted-foreground">حد</p>
-                <p className="font-bold">{customer.CIDLM}</p>
-              </div>
-            </div>
-          </motion.div>
+            }
+            stats={
+              <>
+                <MobileCardStat label="نشطة" value={customer.CIAF7 || 0} />
+                <MobileCardStat label="رسائل" value={customer.CIAF8 || 0} />
+                <MobileCardStat label="حد" value={customer.CIDLM} />
+              </>
+            }
+          />
         ))}
+      </div>
 
-        {filteredCustomers.length === 0 && (
-          <div className="p-12 text-center bg-card rounded-xl border border-border">
-            <Building2 className="w-12 h-12 mx-auto text-muted-foreground/50 mb-4" />
-            <p className="text-muted-foreground">لا توجد نتائج</p>
-          </div>
+      {/* Pagination */}
+      <Pagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        pageSize={pageSize}
+        totalItems={sortedData.length}
+        onPageChange={goToPage}
+        onPageSizeChange={changePageSize}
+      />
+
+      {/* Modals */}
+      <AnimatePresence>
+        {isEditModalOpen && (
+          <CustomerEditModal
+            open={isEditModalOpen}
+            onOpenChange={setIsEditModalOpen}
+            customer={selectedCustomer}
+            onSubmit={handleUpdate}
+            isSubmitting={isSubmitting}
+          />
         )}
-      </div>
+      </AnimatePresence>
 
-      {/* Pagination & Export Footer */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-card p-4 rounded-xl border">
-        <div className="flex items-center gap-4">
-          <p className="text-sm text-muted-foreground whitespace-nowrap">
-            عرض {paginatedCustomers.length} من {filteredCustomers.length} عميل
-          </p>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">عدد الصفوف:</span>
-            <select
-              className="h-8 rounded border bg-background text-xs px-2"
-              value={pageSize}
-              onChange={(e) => {
-                setPageSize(Number(e.target.value));
-                setCurrentPage(1);
-              }}
-            >
-              {[10, 25, 50, 100].map(size => (
-                <option key={size} value={size}>{size}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={currentPage === 1}
-            onClick={() => setCurrentPage(prev => prev - 1)}
-          >
-            <ChevronRight className="w-4 h-4 ml-1" />
-            السابق
-          </Button>
-
-          <div className="flex items-center px-4 py-1 bg-muted rounded-md text-sm font-medium">
-            صفحة {currentPage} من {totalPages || 1}
-          </div>
-
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={currentPage === totalPages || totalPages === 0}
-            onClick={() => setCurrentPage(prev => prev + 1)}
-          >
-            التالي
-            <ChevronLeft className="w-4 h-4 mr-1" />
-          </Button>
-        </div>
-      </div>
+      <DeleteConfirmModal
+        open={isDeleteModalOpen}
+        onOpenChange={setIsDeleteModalOpen}
+        onConfirm={executeDelete}
+        title="حذف العميل"
+        description={`هل أنت متأكد من حذف العميل ${customerToDelete}؟ سيتم حذف جميع الأجهزة المرتبطة به ولا يمكن التراجع عن هذا الإجراء.`}
+        isLoading={isSubmitting}
+      />
     </div>
   );
 }
