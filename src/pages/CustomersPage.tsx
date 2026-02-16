@@ -28,7 +28,7 @@ import { PageLoader } from '@/components/ui/PageLoader';
 import { PageError } from '@/components/ui/PageError';
 import { StatsCard } from '@/components/ui/StatsCard';
 import { MobileCard, MobileCardStat } from '@/components/ui/MobileCard';
-import { Pagination } from '@/components/ui/Pagination';
+import { Pagination } from '@/components/ui/pagination';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { StatusFilter } from '@/components/filters/StatusFilter';
 import { DateRangeFilter } from '@/components/filters/DateRangeFilter';
@@ -102,12 +102,12 @@ export default function CustomersPage() {
   };
 
   const filteredData = useFiltering({ data: customers, filters, filterFn });
-  
+
   // Re-apply text search on top of useFiltering (since searchQuery is separate)
   const searchingData = useMemo(() => {
     if (!searchQuery) return filteredData;
     const searchLower = searchQuery.toLowerCase();
-    return filteredData.filter(customer => 
+    return filteredData.filter(customer =>
       (customer.CINA && customer.CINA.toLowerCase().includes(searchLower)) ||
       (customer.CIPH1 && customer.CIPH1.includes(searchQuery)) ||
       (customer.CIAF1 && customer.CIAF1.toLowerCase().includes(searchLower)) ||
@@ -116,19 +116,19 @@ export default function CustomersPage() {
   }, [filteredData, searchQuery]);
 
   // Sorting
-  const { sortedData, sortConfig, onSort } = useSorting({ 
-    data: searchingData, 
-    initialSort: { key: 'CISEQ', direction: 'desc' } 
+  const { sortedData, sortConfig, onSort } = useSorting({
+    data: searchingData,
+    initialSort: { key: 'CISEQ', direction: 'desc' }
   });
 
   // Pagination
-  const { 
-    paginatedData, 
-    currentPage, 
-    pageSize, 
-    totalPages, 
-    goToPage, 
-    setPageSize: changePageSize 
+  const {
+    paginatedData,
+    currentPage,
+    pageSize,
+    totalPages,
+    goToPage,
+    setPageSize: changePageSize
   } = usePagination({ data: sortedData, initialPageSize: 25 });
 
   // Handlers
@@ -144,12 +144,12 @@ export default function CustomersPage() {
 
   // Check if any filter is active - Defined here to follow Rules of Hooks
   const isFilterActive = useMemo(() => {
-    return searchQuery !== '' || 
-           filters.status !== 'all' || 
-           filters.dateFrom !== '' || 
-           filters.dateTo !== '' || 
-           filters.ciidFrom !== '' || 
-           filters.ciidTo !== '';
+    return searchQuery !== '' ||
+      filters.status !== 'all' ||
+      filters.dateFrom !== '' ||
+      filters.dateTo !== '' ||
+      filters.ciidFrom !== '' ||
+      filters.ciidTo !== '';
   }, [searchQuery, filters]);
 
   const handleUpdate = async (formData: any) => {
@@ -157,7 +157,7 @@ export default function CustomersPage() {
     setIsSubmitting(true);
     try {
       const updateData: any = {};
-      
+
       // Mapping from formData names back to API names if needed
       // Here CustomerEditModal already provides structured data but we need to compare
       const mappings = [
@@ -185,11 +185,11 @@ export default function CustomersPage() {
       mappings.forEach(m => {
         let currentVal = selectedCustomer[m.api];
         let newVal = formData[m.form];
-        
+
         if (m.isDate && currentVal) {
           currentVal = currentVal.split('T')[0];
         }
-        
+
         if (newVal !== currentVal) {
           updateData[m.api] = newVal;
         }
@@ -242,17 +242,17 @@ export default function CustomersPage() {
 
   const handleExport = () => {
     if (sortedData.length === 0) return;
-    
+
     exportToCSV({
       filename: `تقرير_العملاء_${new Date().toISOString().split('T')[0]}`,
       headers: [
-        "معرف العميل (SEQ)", "الرقم العام (ID)", "كود المنظمة (ORG)", "الفرع (AF1)", 
-        "اسم العميل", "الهاتف", "تاريخ الإضافة", "تاريخ النهاية", "الحالة", 
+        "معرف العميل (SEQ)", "الرقم العام (ID)", "كود المنظمة (ORG)", "الفرع (AF1)",
+        "اسم العميل", "الهاتف", "تاريخ الإضافة", "تاريخ النهاية", "الحالة",
         "عدد الأجهزة", "حد الرسائل"
       ],
       data: sortedData.map(c => [
-        c.CISEQ, c.CIID || '', c.CIORG, c.CIAF1 || 'الرئيسي', 
-        c.CINA || '', c.CIPH1 || '', 
+        c.CISEQ, c.CIID || '', c.CIORG, c.CIAF1 || 'الرئيسي',
+        c.CINA || '', c.CIPH1 || '',
         c.DATEI ? new Date(c.DATEI).toLocaleDateString('ar-YE') : '',
         c.CITD ? new Date(c.CITD).toLocaleDateString('ar-YE') : '',
         c.CIST === 1 ? 'فعال' : 'موقوف',
@@ -277,7 +277,7 @@ export default function CustomersPage() {
           <ChevronLeft className="w-3 h-3" />
           <span className="text-primary">العملاء</span>
         </div>
-        
+
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div className="space-y-1">
             <h1 className="text-3xl lg:text-4xl font-black text-foreground tracking-tight flex items-center gap-4">
@@ -287,7 +287,7 @@ export default function CustomersPage() {
               إدارة المنظمات والاشتراكات وتخصيص حدود الرسائل والأجهزة لكل عميل
             </p>
           </div>
-          
+
           <div className="flex items-center gap-3">
             <Button variant="outline" className="h-11 px-5 rounded-xl border-border/60" onClick={handleExport}>
               <FileDown className="w-4 h-4 ml-2" />
@@ -305,29 +305,29 @@ export default function CustomersPage() {
 
       {/* Stats Overview */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatsCard 
-          title="إجمالي العملاء" 
-          value={customers.length} 
-          icon={Building2} 
-          variant="primary" 
+        <StatsCard
+          title="إجمالي العملاء"
+          value={customers.length}
+          icon={Building2}
+          variant="primary"
         />
-        <StatsCard 
-          title="العملاء النشطون" 
-          value={customers.filter(c => c.CIST === 1).length} 
-          icon={Building2} 
-          variant="success" 
+        <StatsCard
+          title="العملاء النشطون"
+          value={customers.filter(c => c.CIST === 1).length}
+          icon={Building2}
+          variant="success"
         />
-        <StatsCard 
-          title="إجمالي الأجهزة" 
-          value={customers.reduce((acc, c) => acc + (c.CINU || 0), 0)} 
-          icon={Smartphone} 
-          variant="warning" 
+        <StatsCard
+          title="إجمالي الأجهزة"
+          value={customers.reduce((acc, c) => acc + (c.CINU || 0), 0)}
+          icon={Smartphone}
+          variant="warning"
         />
-        <StatsCard 
-          title="الجلسات المتصلة" 
-          value={customers.reduce((acc, c) => acc + (c.CIAF7 || 0), 0)} 
-          icon={Smartphone} 
-          variant="primary" 
+        <StatsCard
+          title="الجلسات المتصلة"
+          value={customers.reduce((acc, c) => acc + (c.CIAF7 || 0), 0)}
+          icon={Smartphone}
+          variant="primary"
         />
       </div>
 
@@ -348,9 +348,9 @@ export default function CustomersPage() {
               </h3>
               <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">قم بتخصيص عرض البيانات بناءً على معايير محددة</p>
             </div>
-            <Button 
-              variant="outline" 
-              size="sm" 
+            <Button
+              variant="outline"
+              size="sm"
               onClick={resetFilters}
               className="h-9 px-4 text-[11px] font-bold text-destructive hover:bg-destructive/5 hover:border-destructive/30 border-destructive/10 rounded-xl flex items-center gap-2 transition-all active:scale-95 shadow-sm"
             >
@@ -358,11 +358,11 @@ export default function CustomersPage() {
               تصفير كافة الفلاتر
             </Button>
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <StatusFilter 
-              value={filters.status} 
-              onChange={(v) => setFilters(prev => ({ ...prev, status: v }))} 
+            <StatusFilter
+              value={filters.status}
+              onChange={(v) => setFilters(prev => ({ ...prev, status: v }))}
               label="الحالة"
               options={[
                 { label: 'الكل', value: 'all' },
@@ -370,7 +370,7 @@ export default function CustomersPage() {
                 { label: 'موقوف', value: 'inactive' },
               ]}
             />
-            <RangeFilter 
+            <RangeFilter
               label="الرقم العام (CIID)"
               from={filters.ciidFrom}
               to={filters.ciidTo}
@@ -378,7 +378,7 @@ export default function CustomersPage() {
               onToChange={(v) => setFilters(prev => ({ ...prev, ciidTo: v }))}
             />
             <div className="lg:col-span-2">
-              <DateRangeFilter 
+              <DateRangeFilter
                 label="تاريخ الإضافة"
                 dateFrom={filters.dateFrom}
                 dateTo={filters.dateTo}
