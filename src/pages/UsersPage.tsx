@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Wifi,
@@ -15,6 +15,11 @@ import {
   Calendar,
   Clock,
   ChevronLeft,
+  ArrowUpDown,
+  Loader2,
+  History,
+  X,
+  Plus,
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -43,6 +48,23 @@ import { QrCodeModal } from "@/features/users/components/QrCodeModal";
 import { getUserColumns } from "@/features/users/components/UserTableColumns";
 import { StatusFilter } from "@/components/filters/StatusFilter";
 import { RangeFilter } from "@/components/filters/RangeFilter";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 import { usePagination } from "@/hooks/usePagination";
 import { useSorting } from "@/hooks/useSorting";
@@ -167,12 +189,12 @@ export default function UsersPage() {
 
   // Pagination
   const {
-    paginatedData,
+    paginatedData: paginatedDevices,
     currentPage,
+    setCurrentPage,
     pageSize,
     totalPages,
-    goToPage,
-    setPageSize: changePageSize,
+    setPageSize,
   } = usePagination({ data: sortedData, initialPageSize: 20 });
 
   // Handlers
@@ -351,6 +373,15 @@ export default function UsersPage() {
               الرسائل لكل جلسة
             </p>
           </div>
+
+          <div className="flex items-center gap-3">
+            <Link to="/dashboard/users/add">
+              <Button className="h-11 px-6 rounded-xl shadow-xl shadow-primary/20 hover:scale-[1.02] transition-all">
+                <Plus className="w-4 h-4 ml-2" />
+                إضافة جلسة جديدة
+              </Button>
+            </Link>
+          </div>
         </div>
       </div>
 
@@ -418,109 +449,115 @@ export default function UsersPage() {
             </Button>
           </div>
 
-        {/* Advanced Filters */}
-        <AnimatePresence>
-          {showAdvancedFilters && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="overflow-hidden"
-            >
-              <div className="pt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 border-t border-border mt-2">
-                <div className="space-y-2">
-                  <Label className="text-xs">الحالة</Label>
-                  <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="h-9">
-                      <SelectValue placeholder="اختر الحالة" />
-                    </SelectTrigger>
-                    <SelectContent dir="rtl">
-                      <SelectItem value="all">جميع الحالات</SelectItem>
-                      <SelectItem value="ready">Ready</SelectItem>
-                      <SelectItem value="logout">logout</SelectItem>
-                      <SelectItem value="qr">QR</SelectItem>
-                      <SelectItem value="authenticated">
-                        authenticated
-                      </SelectItem>
-                      <SelectItem value="maxqrcodetries">MaxQR</SelectItem>
-                      <SelectItem value="none">none</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-xs">السيرفر</Label>
-                  <Select value={serverFilter} onValueChange={setServerFilter}>
-                    <SelectTrigger className="h-9">
-                      <SelectValue placeholder="اختر السيرفر" />
-                    </SelectTrigger>
-                    <SelectContent dir="rtl">
-                      <SelectItem value="all">جميع السيرفرات</SelectItem>
-                      {servers.map((s: any, idx: number) => (
-                        <SelectItem
-                          key={`${s.SISN}-${s.SISEQ}-${idx}`}
-                          value={s.SISN}
-                        >
-                          {s.SISN}
+          {/* Advanced Filters */}
+          <AnimatePresence>
+            {showAdvancedFilters && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="pt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 border-t border-border mt-2">
+                  <div className="space-y-2">
+                    <Label className="text-xs">الحالة</Label>
+                    <Select
+                      value={filters.status}
+                      onValueChange={(v) => setFilters(prev => ({ ...prev, status: v }))}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="اختر الحالة" />
+                      </SelectTrigger>
+                      <SelectContent dir="rtl">
+                        <SelectItem value="all">جميع الحالات</SelectItem>
+                        <SelectItem value="ready">Ready</SelectItem>
+                        <SelectItem value="logout">logout</SelectItem>
+                        <SelectItem value="qr">QR</SelectItem>
+                        <SelectItem value="authenticated">
+                          authenticated
                         </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                        <SelectItem value="maxqrcodetries">MaxQR</SelectItem>
+                        <SelectItem value="none">none</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-                <div className="space-y-2">
-                  <Label className="text-xs">التاريخ</Label>
-                  <Select value={dateFilter} onValueChange={setDateFilter}>
-                    <SelectTrigger className="h-9">
-                      <SelectValue placeholder="اختر الفترة" />
-                    </SelectTrigger>
-                    <SelectContent dir="rtl">
-                      <SelectItem value="all">كل الأوقات</SelectItem>
-                      <SelectItem value="hour">آخر ساعة</SelectItem>
-                      <SelectItem value="day">آخر 24 ساعة</SelectItem>
-                      <SelectItem value="week">آخر أسبوع</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs">السيرفر</Label>
+                    <Select
+                      value={filters.server}
+                      onValueChange={(v) => setFilters(prev => ({ ...prev, server: v }))}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="اختر السيرفر" />
+                      </SelectTrigger>
+                      <SelectContent dir="rtl">
+                        <SelectItem value="all">جميع السيرفرات</SelectItem>
+                        {servers.map((s: any, idx: number) => (
+                          <SelectItem
+                            key={`${s.SISN}-${s.SISEQ}-${idx}`}
+                            value={s.SISN}
+                          >
+                            {s.SISN}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-                <div className="space-y-2">
-                  <Label className="text-xs">رقم العميل (من - إلى)</Label>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      placeholder="من"
-                      value={customerFrom}
-                      onChange={(e) => setCustomerFrom(e.target.value)}
-                      className="h-9"
-                    />
-                    <Input
-                      placeholder="إلى"
-                      value={customerTo}
-                      onChange={(e) => setCustomerTo(e.target.value)}
-                      className="h-9"
-                    />
+                  <div className="space-y-2">
+                    <Label className="text-xs">التاريخ</Label>
+                    <Select
+                      value={filters.date}
+                      onValueChange={(v) => setFilters(prev => ({ ...prev, date: v }))}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="اختر الفترة" />
+                      </SelectTrigger>
+                      <SelectContent dir="rtl">
+                        <SelectItem value="all">كل الأوقات</SelectItem>
+                        <SelectItem value="hour">آخر ساعة</SelectItem>
+                        <SelectItem value="day">آخر 24 ساعة</SelectItem>
+                        <SelectItem value="week">آخر أسبوع</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs">رقم العميل (من - إلى)</Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        placeholder="من"
+                        value={filters.customerFrom}
+                        onChange={(e) => setFilters(prev => ({ ...prev, customerFrom: e.target.value }))}
+                        className="h-9"
+                      />
+                      <Input
+                        placeholder="إلى"
+                        value={filters.customerTo}
+                        onChange={(e) => setFilters(prev => ({ ...prev, customerTo: e.target.value }))}
+                        className="h-9"
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div className="flex justify-end mt-4">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-xs h-8"
-                  onClick={() => {
-                    setStatusFilter("all");
-                    setServerFilter("all");
-                    setDateFilter("all");
-                    setCustomerFrom("");
-                    setCustomerTo("");
-                  }}
-                >
-                  إعادة تعيين الفلاتر
-                </Button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+                <div className="flex justify-end mt-4">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs h-8"
+                    onClick={() => {
+                      setFilters(initialFilters);
+                    }}
+                  >
+                    إعادة تعيين الفلاتر
+                  </Button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </SearchFilterBar>
 
       {/* Desktop Table */}
       <motion.div
@@ -603,13 +640,13 @@ export default function UsersPage() {
                     </td>
                     <td>{device.server_name || "-"}</td>
                     <td>
-                      <SessionStatus status={device.status} />
+                      <StatusBadge status={device.status} />
                     </td>
                     <td className="text-[10px]">
                       {device.last_message_date
                         ? new Date(device.last_message_date).toLocaleString(
-                            "ar-YE",
-                          )
+                          "ar-YE",
+                        )
                         : "-"}
                     </td>
                     <td>
@@ -681,7 +718,7 @@ export default function UsersPage() {
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8"
-                          onClick={() => handleRestartSession(device)}
+                          onClick={() => handleRestart(device)}
                           disabled={restartingIds.has(
                             String(device.session_id || device.user_code),
                           )}
@@ -711,14 +748,17 @@ export default function UsersPage() {
                           >
                             <DropdownMenuItem
                               className="gap-2 justify-end"
-                              onClick={() => handleEdit(device)}
+                              onClick={() => {
+                                setSelectedDevice(device);
+                                setIsEditModalOpen(true);
+                              }}
                             >
                               تعديل
                               <History className="w-4 h-4" />
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               className="gap-2 text-destructive justify-end"
-                              onClick={() => handleDelete(device)}
+                              onClick={() => handleDeleteConfirm(device)}
                             >
                               حذف
                               <Trash2 className="w-4 h-4" />
@@ -774,7 +814,7 @@ export default function UsersPage() {
                     </p>
                   </div>
                 </div>
-                <SessionStatus status={device.status} />
+                <StatusBadge status={device.status} />
               </div>
 
               <div className="grid grid-cols-2 gap-2 text-[11px] border-t border-border pt-3">
@@ -829,7 +869,7 @@ export default function UsersPage() {
                   variant="outline"
                   size="sm"
                   className="flex-1 gap-2"
-                  onClick={() => handleRestartSession(device)}
+                  onClick={() => handleRestart(device)}
                   disabled={restartingIds.has(
                     String(device.session_id || device.user_code),
                   )}
@@ -852,14 +892,17 @@ export default function UsersPage() {
                   <DropdownMenuContent align="end" className="w-40 text-right">
                     <DropdownMenuItem
                       className="gap-2 justify-end"
-                      onClick={() => handleEdit(device)}
+                      onClick={() => {
+                        setSelectedDevice(device);
+                        setIsEditModalOpen(true);
+                      }}
                     >
                       تعديل
                       <History className="w-4 h-4" />
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       className="gap-2 text-destructive justify-end"
-                      onClick={() => handleDelete(device)}
+                      onClick={() => handleDeleteConfirm(device)}
                     >
                       حذف
                       <Trash2 className="w-4 h-4" />
@@ -871,7 +914,7 @@ export default function UsersPage() {
           );
         })}
 
-        {filteredDevices.length === 0 && (
+        {paginatedDevices.length === 0 && (
           <div className="p-12 text-center bg-card rounded-xl border border-border">
             <Smartphone className="w-12 h-12 mx-auto text-muted-foreground/50 mb-4" />
             <p className="text-muted-foreground">لا توجد أجهزة</p>
@@ -880,255 +923,41 @@ export default function UsersPage() {
       </div>
 
       {/* Pagination */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-4 border-t">
-        <div className="flex items-center gap-4">
-          <p className="text-sm text-muted-foreground">
-            عرض {paginatedDevices.length} من {filteredDevices.length} جهاز
-          </p>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">عرض:</span>
-            <select
-              className="text-xs bg-muted border rounded p-1"
-              value={pageSize}
-              onChange={(e) => {
-                setPageSize(Number(e.target.value));
-                setCurrentPage(1);
-              }}
-            >
-              <option value={20}>20 جلسة</option>
-              <option value={50}>50 جلسة</option>
-            </select>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={currentPage === 1}
-            onClick={() => setCurrentPage((prev) => prev - 1)}
-          >
-            السابق
-          </Button>
-          <div className="flex items-center gap-1">
-            {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
-              // Simple pagination logic to show current +/- 2 pages
-              let pageNum = i + 1;
-              if (totalPages > 5 && currentPage > 3) {
-                pageNum = currentPage - 3 + pageNum;
-                if (pageNum > totalPages) pageNum = totalPages - (5 - i - 1);
-              }
+      <Pagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        pageSize={pageSize}
+        totalItems={sortedData.length}
+        onPageChange={setCurrentPage}
+        onPageSizeChange={setPageSize}
+      />
 
-              return (
-                <Button
-                  key={`page-${pageNum}-${i}`}
-                  variant={currentPage === pageNum ? "default" : "outline"}
-                  size="sm"
-                  className="w-8 h-8 p-0"
-                  onClick={() => setCurrentPage(pageNum)}
-                >
-                  {pageNum}
-                </Button>
-              );
-            })}
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={currentPage === totalPages}
-            onClick={() => setCurrentPage((prev) => prev + 1)}
-          >
-            التالي
-          </Button>
-        </div>
-      </div>
+      {/* Modals */}
+      <QrCodeModal
+        open={isQRModalOpen}
+        onOpenChange={setIsQRModalOpen}
+        qrCode={selectedDevice?.SOMQR || null}
+        isLoading={isLoadingQR}
+        onRefresh={() => handleShowQR(selectedDevice)}
+        deviceName={selectedDevice?.SOMNA || selectedDevice?.customer_name}
+      />
 
-      {/* QR Code Modal */}
-      <AnimatePresence>
-        {showQRModal && selectedDevice && (
-          <Dialog open={showQRModal} onOpenChange={setShowQRModal}>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <QrCode className="w-5 h-5 text-primary" />
-                  رمز QR -{" "}
-                  {selectedDevice.SOMNA ||
-                    selectedDevice.SOMDE ||
-                    selectedDevice.USER}
-                </DialogTitle>
-              </DialogHeader>
-              <div className="flex flex-col items-center justify-center py-8">
-                {isLoadingQR ? (
-                  <div className="w-48 h-48 flex items-center justify-center bg-muted rounded-xl">
-                    <Loader2 className="w-8 h-8 animate-spin text-primary" />
-                  </div>
-                ) : (
-                  <motion.div
-                    initial={{ scale: 0.8, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    className="w-48 h-48 bg-white rounded-xl p-4 shadow-lg"
-                  >
-                    {/* Display actual QR if available */}
-                    {selectedDevice.SOMQR ? (
-                      <img
-                        src={selectedDevice.SOMQR}
-                        alt="QR Code"
-                        className="w-full h-full object-contain"
-                      />
-                    ) : (
-                      <div className="w-full h-full bg-gradient-to-br from-foreground/10 to-foreground/5 rounded-lg flex items-center justify-center">
-                        <QrCode className="w-24 h-24 text-foreground/20" />
-                      </div>
-                    )}
-                  </motion.div>
-                )}
-                <p className="text-sm text-muted-foreground mt-4 text-center">
-                  امسح هذا الرمز باستخدام تطبيق واتساب
-                </p>
-                <p
-                  className="text-xs text-muted-foreground mt-2 font-mono"
-                  dir="ltr"
-                >
-                  {selectedDevice.SOMPH || "-"}
-                </p>
-              </div>
-              <div className="flex justify-end">
-                <Button variant="outline" onClick={() => setShowQRModal(false)}>
-                  <X className="w-4 h-4 ml-2" />
-                  إغلاق
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-        )}
-      </AnimatePresence>
-
-      {/* Delete Confirmation Modal */}
-      <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-        <DialogContent className="sm:max-w-md text-right" dir="rtl">
-          <DialogHeader>
-            <DialogTitle className="text-right text-destructive flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5" />
-              تأكيد حذف الجلسة
-            </DialogTitle>
-            <DialogDescription className="text-right pt-2 text-foreground font-medium">
-              هل أنت متأكد من رغبتك في حذف الجلسة{" "}
-              <span className="font-mono bg-muted px-1.5 py-0.5 rounded text-destructive">
-                {selectedDevice?.session_id}
-              </span>
-              ؟
-            </DialogDescription>
-          </DialogHeader>
-          <div className="p-4 rounded-lg bg-destructive/5 border border-destructive/20 mt-2">
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              هذا الإجراء نهائي ولا يمكن التراجع عنه. سيتم إزالة جميع البيانات
-              المرتبطة بهذه الجلسة من النظام فوراً.
-            </p>
-          </div>
-          <DialogFooter className="gap-2 sm:justify-start mt-4">
-            <Button
-              variant="outline"
-              onClick={() => setShowDeleteConfirm(false)}
-            >
-              إلغاء
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={confirmDelete}
-              disabled={isSubmitting}
-              className="gap-2"
-            >
-              {isSubmitting ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Trash2 className="w-4 h-4" />
-              )}
-              تأكيد الحذف النهائي
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Edit User Modal */}
-      <AnimatePresence>
-        {showEditModal && (
-          <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
-            <DialogContent className="sm:max-w-md text-right" dir="rtl">
-              <DialogHeader>
-                <DialogTitle className="text-right">
-                  تعديل بيانات الجهاز
-                </DialogTitle>
-                <DialogDescription className="text-right">
-                  تحديث معلومات الجهاز:{" "}
-                  {selectedDevice?.SOMNA || selectedDevice?.customer_name}
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="space-y-2 text-right">
-                  <Label htmlFor="edit-name">اسم الجهاز</Label>
-                  <Input
-                    id="edit-name"
-                    value={editData.name}
-                    onChange={(e) =>
-                      setEditData({ ...editData, name: e.target.value })
-                    }
-                    placeholder="اسم الجهاز"
-                  />
-                </div>
-                <div className="space-y-2 text-right">
-                  <Label htmlFor="edit-phone">رقم الهاتف</Label>
-                  <Input
-                    id="edit-phone"
-                    value={editData.phone}
-                    onChange={(e) =>
-                      setEditData({ ...editData, phone: e.target.value })
-                    }
-                    placeholder="رقم الهاتف"
-                    dir="ltr"
-                  />
-                </div>
-                <div className="space-y-2 text-right">
-                  <Label htmlFor="edit-detail">التفاصيل / الموقع</Label>
-                  <Input
-                    id="edit-detail"
-                    value={editData.detail}
-                    onChange={(e) =>
-                      setEditData({ ...editData, detail: e.target.value })
-                    }
-                    placeholder="التفاصيل"
-                  />
-                </div>
-              </div>
-              <DialogFooter className="gap-2 sm:justify-start">
-                <Button
-                  variant="outline"
-                  onClick={() => setShowEditModal(false)}
-                >
-                  إلغاء
-                </Button>
-                <Button onClick={handleUpdate} disabled={isSubmitting}>
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="w-4 h-4 ml-2 animate-spin" />
-                      جاري الحفظ...
-                    </>
-                  ) : (
-                    "حفظ التغييرات"
-                  )}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        )}
-      </AnimatePresence>
+      <UserEditModal
+        open={isEditModalOpen}
+        onOpenChange={setIsEditModalOpen}
+        user={selectedDevice}
+        onSubmit={handleUpdate}
+        isSubmitting={isSubmitting}
+      />
 
       <DeleteConfirmModal
         open={isDeleteModalOpen}
         onOpenChange={setIsDeleteModalOpen}
         onConfirm={executeDelete}
         title="حذف الجلسة"
-        description={`هل أنت متأكد من حذف الجلسة ${selectedDevice?.session_id}؟`}
+        description={`هل أنت متأكد من حذف الجلسة ${selectedDevice?.session_id}؟ هذا الإجراء لا يمكن التراجع عنه.`}
         isLoading={isSubmitting}
       />
-    </div>
+    </div >
   );
 }
