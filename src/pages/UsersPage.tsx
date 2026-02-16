@@ -259,15 +259,42 @@ export default function UsersPage() {
       const response = await getQrCode(userId);
       console.log("QR Response:", response);
 
-      const qrCode =
-        response.data?.qr ||
-        response.data?.qrcode ||
-        (typeof response.data === "string" ? response.data : null);
+      // Extract QR code from various potential response structures
+      let qrData = null;
+      if (response && response.data) {
+        qrData =
+          response.data.qrCode || // Added based on user screenshot
+          response.data.qr ||
+          response.data.qrcode ||
+          response.data.SOMQR ||
+          (typeof response.data === "string" ? response.data : null);
+      } else if (response) {
+        qrData =
+          (response as any).qrCode ||
+          (response as any).qr ||
+          (response as any).qrcode ||
+          (response as any).SOMQR;
+      }
 
-      if (qrCode) {
-        setSelectedDevice((prev: any) => ({ ...prev, SOMQR: qrCode }));
+      if (qrData) {
+        let formattedQr = qrData;
+
+        // If it's not a data URL or a link, it's either base64 or a raw string
+        if (!String(qrData).startsWith("data:image/") && !String(qrData).startsWith("http")) {
+          // Check if it's a valid base64 image string (no whitespace, only base64 chars)
+          const isPureBase64 = /^[A-Za-z0-9+/=]+$/.test(String(qrData));
+
+          if (isPureBase64 && String(qrData).length > 100) {
+            formattedQr = `data:image/png;base64,${qrData}`;
+          } else {
+            // It's likely a raw WhatsApp string (like 2@...), use generation API
+            formattedQr = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrData)}`;
+          }
+        }
+
+        setSelectedDevice((prev: any) => ({ ...prev, SOMQR: formattedQr }));
       } else {
-        console.warn("QR code not found in response data");
+        console.warn("QR code not found in response data:", response);
       }
     } catch (error: any) {
       console.error("Failed to fetch QR code. Detailed Error:", error);
@@ -688,8 +715,8 @@ export default function UsersPage() {
                     <td className="text-[10px]">
                       {device.last_message_date
                         ? new Date(device.last_message_date).toLocaleString(
-                            "ar-YE",
-                          )
+                          "ar-YE",
+                        )
                         : "-"}
                     </td>
                     <td>
@@ -1032,8 +1059,9 @@ export default function UsersPage() {
                   <QrCode className="w-5 h-5 text-primary" />
                   رمز QR -{" "}
                   {selectedDevice.SOMNA ||
-                    selectedDevice.SOMDE ||
-                    selectedDevice.USER}
+                    selectedDevice.user_name ||
+                    selectedDevice.customer_name ||
+                    selectedDevice.session_id}
                 </DialogTitle>
               </DialogHeader>
               <div className="flex flex-col items-center justify-center py-8">
@@ -1068,7 +1096,7 @@ export default function UsersPage() {
                   className="text-xs text-muted-foreground mt-2 font-mono"
                   dir="ltr"
                 >
-                  {selectedDevice.SOMPH || "-"}
+                  {selectedDevice.SOMPH || selectedDevice.session_id || "-"}
                 </p>
               </div>
               <div className="flex justify-end">

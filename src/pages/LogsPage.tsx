@@ -68,7 +68,7 @@ export default function LogsPage() {
   const totalLogs = logs.length;
   const totalPages = Math.ceil(totalLogs / pageSize);
 
-  const { filteredLogs, searchTime } = useMemo(() => {
+  const { filteredLogs, clientSearchTime } = useMemo(() => {
     const start = performance.now();
     
     const filtered = logs.filter((log) => {
@@ -95,9 +95,25 @@ export default function LogsPage() {
     const end = performance.now();
     return {
       filteredLogs: filtered,
-      searchTime: ((end - start) / 1000).toFixed(3)
+      clientSearchTime: ((end - start) / 1000).toFixed(3)
     };
   }, [logs, searchQuery, levelFilter]);
+
+  const apiSearchTime = (() => {
+    const raw = (data as any)?.searchTime ?? (data as any)?.elapsed ?? (data as any)?.took ?? (data as any)?.time ?? null;
+    if (raw == null) return null;
+    if (typeof raw === 'number') {
+      // if server returns milliseconds (likely when value > 10), convert to seconds
+      return (raw > 10 ? (raw / 1000) : raw).toFixed(3);
+    }
+    const n = Number(raw);
+    if (!isNaN(n)) {
+      return (n > 10 ? (n / 1000) : n).toFixed(3);
+    }
+    return String(raw);
+  })();
+
+  const displayedSearchTime = apiSearchTime ?? clientSearchTime;
 
   const pagedLogs = filteredLogs.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
@@ -266,11 +282,16 @@ export default function LogsPage() {
           <div className="flex items-center justify-between">
             <div className="space-y-1">
               <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">سرعة البحث</p>
-              <h4 className="text-2xl font-black text-foreground">{searchTime}s</h4>
+              <h4 className="text-2xl font-black text-foreground">{displayedSearchTime}s</h4>
             </div>
-            <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center text-muted-foreground">
-              <RefreshCw className="w-5 h-5" />
-            </div>
+            <button
+              onClick={() => refetch()}
+              title="تحديث السجلات"
+              disabled={isFetching}
+              className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center text-muted-foreground hover:bg-muted/70 transition-colors disabled:opacity-60"
+            >
+              <RefreshCw className={`w-5 h-5 ${isFetching ? 'animate-spin' : ''}`} />
+            </button>
           </div>
         </div>
       </div>

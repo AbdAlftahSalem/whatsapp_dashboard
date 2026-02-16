@@ -557,7 +557,7 @@ export default function CustomersPage() {
                 <th className="min-w-[140px]">النظام والاصدار</th>
                 <th className="min-w-[120px]">المسؤول</th>
                 <th className="min-w-[120px]">CIORG</th>
-                <th className="sticky left-0 bg-muted/50" style={{backgroundColor: 'oklch(96.8% 0.007 247.896)'}}>الإجراءات</th>
+                <th className="sticky left-0 bg-muted/50" style={{ backgroundColor: 'oklch(96.8% 0.007 247.896)' }}>الإجراءات</th>
               </tr>
             </thead>
             <tbody>
@@ -610,7 +610,7 @@ export default function CustomersPage() {
                     <span className="text-xs font-medium">{customer.CIDLM}</span>
                   </td>
                   <td>
-                    <span className="text-xs font-medium text-success">{customer.CIAF7 || 0}</span>
+                    <span className="text-xs font-medium text-success">{customer.numberReadySessions || 0}</span>
                   </td>
                   <td>
                     <span className="text-xs font-medium">{customer.CIAF8 || 0}</span>

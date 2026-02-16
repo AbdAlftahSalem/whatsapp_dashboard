@@ -97,6 +97,7 @@ export interface CustomersResponse {
       DEVU: any;
       GUID: string | null;
       RES: any;
+      numberReadySessions: number;
     }>;
   };
 }
@@ -609,11 +610,12 @@ export interface QrCodeResponse {
 
 export async function getQrCode(user: string): Promise<QrCodeResponse> {
   console.log("Fetching QR Code for user:", user);
-  const response = await fetch(`${BASE_URL}/ESAPI/EWA/V3/auth/get_qr`, {
-    method: "GET",
+  const response = await fetch(`${BASE_URL}/ESAPI/EWA/V3/auth/get_qr2`, {
+    method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
+    body: JSON.stringify({ user }),
   });
 
   const responseText = await response.text();
@@ -740,6 +742,12 @@ export interface LogEntry {
 export interface LogsResponse {
   status: string;
   data: LogEntry[];
+  // Optional server-side timing fields (UI prefers these if present).
+  // Values may be milliseconds (common) or seconds — UI will normalize.
+  elapsed?: number;
+  took?: number;
+  searchTime?: number | string;
+  [key: string]: any;
 }
 
 export async function getLogs(
