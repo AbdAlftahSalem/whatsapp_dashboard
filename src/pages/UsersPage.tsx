@@ -227,10 +227,14 @@ export default function UsersPage() {
       const qrCode =
         response.data?.qr ||
         response.data?.qrcode ||
+        response.data?.qrCode ||
         (typeof response.data === "string" ? response.data : null);
 
       if (qrCode) {
-        setSelectedDevice((prev: any) => ({ ...prev, SOMQR: qrCode }));
+        const qrImageUrl = (typeof qrCode === 'string' && !qrCode.startsWith('data:') && !qrCode.startsWith('http'))
+          ? `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(qrCode)}&size=256x256`
+          : qrCode;
+        setSelectedDevice((prev: any) => ({ ...prev, SOMQR: qrImageUrl }));
       } else {
         console.warn("QR code not found in response data");
       }

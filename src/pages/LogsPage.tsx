@@ -41,7 +41,7 @@ export default function LogsPage() {
   const [isBackupModalOpen, setIsBackupModalOpen] = useState(false);
   const [backupProgress, setBackupProgress] = useState(0);
   const [isBackingUp, setIsBackingUp] = useState(false);
-  
+
   const [filters, setFilters] = useState({
     level: 'all',
   });
@@ -71,8 +71,8 @@ export default function LogsPage() {
   const filterFn = (log: any, fs: any) => {
     const searchLower = searchQuery.toLowerCase();
     const payloadString = log.SAPA ? JSON.stringify(log.SAPA).toLowerCase() : '';
-    
-    const matchesLevel = fs.level === 'all' || 
+
+    const matchesLevel = fs.level === 'all' ||
       (log.SATY?.toUpperCase().includes(fs.level.toUpperCase()) ?? false);
 
     if (!matchesLevel) return false;
@@ -90,19 +90,19 @@ export default function LogsPage() {
   const filteredData = useFiltering({ data: logs, filters, filterFn });
 
   // Sorting
-  const { sortedData, sortConfig, onSort } = useSorting({ 
-    data: filteredData, 
-    initialSort: { key: 'SASEQ', direction: 'desc' } 
+  const { sortedData, sortConfig, onSort } = useSorting({
+    data: filteredData,
+    initialSort: { key: 'SASEQ', direction: 'desc' }
   });
 
   // Pagination
-  const { 
-    paginatedData, 
-    currentPage, 
-    pageSize, 
-    totalPages, 
-    goToPage, 
-    setPageSize: changePageSize 
+  const {
+    paginatedData,
+    currentPage,
+    pageSize,
+    totalPages,
+    goToPage,
+    setPageSize: changePageSize
   } = usePagination({ data: sortedData, initialPageSize: 20 });
 
   // Handlers
@@ -143,7 +143,7 @@ export default function LogsPage() {
           <ChevronLeft className="w-3 h-3" />
           <span className="text-primary">سجلات النظام</span>
         </div>
-        
+
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div className="space-y-1">
             <h1 className="text-3xl lg:text-4xl font-black text-foreground tracking-tight flex items-center gap-4">
@@ -153,8 +153,8 @@ export default function LogsPage() {
               نظام شامل لعرض وإدارة سجلات النظام مع إمكانية الأرشفة والنسخ الاحتياطي
             </p>
           </div>
-          
-          <div className="flex items-center gap-3">
+
+          {/* <div className="flex items-center gap-3">
             <Button variant="outline" onClick={() => setIsBackupModalOpen(true)} className="h-11 px-5 rounded-xl border-border/60">
               <Database className="w-4 h-4 ml-2 text-primary" />
               Database Backup
@@ -163,7 +163,7 @@ export default function LogsPage() {
               <Plus className="w-4 h-4 ml-2" />
               إضافة تنبيه جديد
             </Button>
-          </div>
+          </div> */}
         </div>
       </div>
 
@@ -182,7 +182,7 @@ export default function LogsPage() {
         searchPlaceholder="البحث في الرسائل، المستخدم، الجلسة، المسار..."
       >
         <div className="flex items-center gap-4 mt-4">
-          <StatusFilter 
+          <StatusFilter
             label="مستوى التنبيه"
             value={filters.level}
             onChange={v => setFilters(prev => ({ ...prev, level: v }))}
@@ -229,7 +229,7 @@ export default function LogsPage() {
               جاري إنشاء نسخة احتياطية كاملة من سجلات النظام وقواعد البيانات...
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="py-6 space-y-4">
             <div className="space-y-2">
               <div className="flex justify-between text-xs font-bold">
@@ -238,7 +238,7 @@ export default function LogsPage() {
               </div>
               <Progress value={backupProgress} className="h-2" />
             </div>
-            
+
             <div className="p-3 rounded-lg bg-muted text-[10px] font-mono text-muted-foreground leading-relaxed">
               {backupProgress < 30 && "> Initializing backup engine..."}
               {backupProgress >= 30 && backupProgress < 60 && "> Compressing log tables..."}

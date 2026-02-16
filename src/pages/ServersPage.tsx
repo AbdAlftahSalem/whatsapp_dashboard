@@ -400,10 +400,10 @@ export default function ServersPage() {
           </div>
           
           <div className="flex items-center gap-3">
-            <Button variant="outline" className="h-11 px-5 rounded-xl border-border/60 bg-background/50 hover:bg-muted/50 transition-all font-bold text-xs">
+            {/* <Button variant="outline" className="h-11 px-5 rounded-xl border-border/60 bg-background/50 hover:bg-muted/50 transition-all font-bold text-xs">
               <RefreshCw className="w-4 h-4 ml-2 text-muted-foreground" />
               إعادة تشغيل النظام
-            </Button>
+            </Button> */}
             <Button onClick={() => setIsAddModalOpen(true)} className="h-11 px-6 rounded-xl shadow-xl shadow-primary/20 hover:scale-[1.02] transition-all font-bold text-xs uppercase tracking-wider">
               <Plus className="w-4 h-4 ml-2" />
               إضافة خادم جديد

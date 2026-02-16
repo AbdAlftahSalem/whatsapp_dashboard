@@ -50,19 +50,10 @@ export function QrCodeModal({
           </div>
         ) : (
           <div className="w-64 h-64 border-2 border-dashed border-muted-foreground/20 rounded-2xl flex flex-col items-center justify-center text-muted-foreground p-6 text-center space-y-3">
-             <Smartphone className="w-12 h-12 opacity-20" />
-             <p className="text-sm font-medium">لم يتم توليد الرمز بعد، اضغط تحديث للمحاولة</p>
+            <Smartphone className="w-12 h-12 opacity-20" />
+            <p className="text-sm font-medium">لم يتم توليد الرمز بعد، اضغط تحديث للمحاولة</p>
           </div>
         )}
-
-        <div className="w-full max-w-xs space-y-3 text-center">
-          <p className="text-sm font-bold text-foreground">تعليمات الربط:</p>
-          <ul className="text-xs text-muted-foreground space-y-2 list-decimal list-inside">
-            <li>افتح واتساب على هاتفك</li>
-            <li>اضغط على الأجهزة المرتبطة</li>
-            <li>وجه الكاميرا نحو هذا المربع</li>
-          </ul>
-        </div>
       </div>
     </BaseModal>
   );
